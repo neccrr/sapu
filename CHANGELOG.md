@@ -1,0 +1,53 @@
+# Changelog
+
+## 0.10.0
+- **Instant start:** the last scan is cached (`~/Library/Caches/sapu/scans/`) and shown
+  immediately while a fresh scan runs in the background. Nothing can be cleaned until the
+  fresh scan is done. ⌘R now refreshes in the background too.
+- **Clear data layout** following macOS conventions: `Application Support/sapu/ai/` and
+  `safety/`, `Caches/sapu/`, `Logs/sapu/` (rotated at 10 MB). Old files move automatically.
+- "Data on this Mac" in the Safety tab, and `sapu data [--clear-cache]`.
+- Bundle ID is now `io.github.neccrr.sapu`.
+
+## 0.9.0
+- **iCloud delete with consent.** Items in iCloud can now be deleted, but only after an
+  explicit "I understand" in a dedicated dialog (or typing `delete` in the terminal).
+  The core refuses iCloud deletes without consent, never deletes whole iCloud containers,
+  and automatic cleaning never touches iCloud.
+- GitHub-ready: README with screenshots, MIT license, CI (fmt, clippy, tests on macOS),
+  release workflow that builds a universal Sapu.app, issue templates.
+
+## 0.8.1
+- Fix: window opened blank on macOS (the blur layer was drawn over the content).
+  The blur is now placed behind the content and is opt-in (`SAPU_GLASS=1`).
+- Fewer, better AI guesses: confidence ≥ 85%, at most 40 per list.
+
+## 0.8.0
+- Logging everywhere, and a 📜 Logs window (⌘L) with filters, search, copy.
+- Crashes are logged with file and line.
+
+## 0.7.0
+- Claude-inspired look: warm palette, serif headings, glass cards, smooth motion,
+  follows Light/Dark.
+- iCloud tab: downloaded vs cloud-only, "Remove download" (keeps it in iCloud), "Download".
+
+## 0.6.0
+- Failsafes: write-ahead journal + Undo, re-check before deleting, your protected list,
+  warnings for folders containing git repos or Photos libraries, background cleaning
+  with Stop, extra confirmation for risky batches.
+
+## 0.5.0
+- Sapu AI: an on-device classifier (logistic regression over path features) trained
+  from rules, a labelled seed set and your feedback.
+
+## 0.4.0
+- Judgement system (Safe / Likely / Review / Keep) and cleanup recommendations.
+
+## 0.3.0
+- Window app (egui) with a list and a squarified treemap.
+
+## 0.2.0
+- Parallel tree scanner, terminal explorer, structured logging.
+
+## 0.1.0
+- First skeleton: scanner, cleanup rules, CLI.

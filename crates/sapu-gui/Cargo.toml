@@ -1,0 +1,32 @@
+[package]
+name = "sapu-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "../../README.md"
+keywords = ["disk", "storage", "cleaner", "macos", "icloud"]
+categories = ["command-line-utilities", "filesystem"]
+description = "Sapu: a macOS storage analyzer and cleaner (window app)"
+
+[[bin]]
+name = "sapu-gui"
+path = "src/main.rs"
+
+[dependencies]
+sapu-core.workspace = true
+eframe.workspace = true
+rfd.workspace = true
+humansize.workspace = true
+dirs.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSView", "NSVisualEffectView", "NSWindow", "NSResponder", "NSGraphics", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+raw-window-handle = "0.6"

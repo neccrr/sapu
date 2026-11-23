@@ -1,0 +1,17 @@
+# Build output
+/target
+/dist
+**/*.rs.bk
+
+# macOS
+.DS_Store
+._*
+
+# Xcode (future macOS shell)
+macos/build/
+*.xcuserstate
+xcuserdata/
+
+# Local leftovers
+/_to_delete
+*.log

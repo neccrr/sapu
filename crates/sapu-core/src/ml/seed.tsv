@@ -1,0 +1,154 @@
+# Hand-labelled examples the rules don't cover.
+# verdict	kind	path (relative to home)	size_mb	age_days
+# ── app caches hidden inside Application Support (Electron/Chromium apps) ──
+Safe	dir	Library/Application Support/Slack/Cache	400	3
+Safe	dir	Library/Application Support/Slack/Code Cache	120	3
+Safe	dir	Library/Application Support/Slack/Service Worker/CacheStorage	300	5
+Safe	dir	Library/Application Support/discord/Cache	350	2
+Safe	dir	Library/Application Support/discord/Code Cache	90	2
+Safe	dir	Library/Application Support/discord/GPUCache	20	2
+Safe	dir	Library/Application Support/Code/Cache	250	1
+Safe	dir	Library/Application Support/Code/CachedData	400	1
+Safe	dir	Library/Application Support/Code/CachedExtensionVSIXs	300	20
+Safe	dir	Library/Application Support/Code/logs	80	1
+Safe	dir	Library/Application Support/Microsoft Teams/Cache	500	4
+Safe	dir	Library/Application Support/Notion/Partitions/notion/Cache	300	2
+Safe	dir	Library/Application Support/Spotify/PersistentCache	2000	1
+Safe	dir	Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage	900	1
+Safe	dir	Library/Application Support/Google/Chrome/Default/Code Cache	200	1
+Safe	dir	Library/Application Support/Google/Chrome/Default/GPUCache	30	1
+Safe	dir	Library/Application Support/BraveSoftware/Brave-Browser/Default/Cache	400	1
+Safe	dir	Library/Application Support/Arc/User Data/Default/Cache	500	1
+Safe	dir	Library/Application Support/Figma/DesktopProfile/Cache	300	3
+Safe	dir	Library/Application Support/zoom.us/AutoUpdater	150	60
+Safe	dir	Library/Application Support/Caches/some-app	200	30
+Safe	dir	Library/Application Support/Steam/appcache	300	10
+Safe	dir	Library/Application Support/Steam/depotcache	200	10
+Safe	dir	Library/Application Support/minecraft/webcache2	150	30
+Safe	dir	Library/Application Support/JetBrains/IntelliJIdea2024.3/caches	800	2
+Safe	dir	Library/Application Support/Adobe/Common/Media Cache Files	3000	20
+Safe	dir	Library/Application Support/Adobe/Common/Media Cache	1500	20
+Safe	dir	Library/Containers/com.apple.Safari/Data/Library/Caches	400	2
+Safe	dir	Library/Containers/com.tinyspeck.slackmacgap/Data/Library/Caches	300	3
+Safe	dir	Library/Group Containers/group.com.apple.notes/Cache	60	5
+Safe	dir	Library/Application Support/CrashReporter	40	100
+Safe	dir	Library/Application Support/com.apple.sharedfilelist/thumbnails	50	30
+Safe	dir	.gradle/wrapper/dists	600	200
+Safe	dir	.cache/pip	900	30
+Safe	dir	.cache/huggingface/hub	5000	60
+Safe	dir	.cache/torch	2000	60
+Safe	dir	.npm/_logs	10	5
+Safe	dir	.yarn/berry/cache	600	30
+Safe	dir	.deno/cache	300	40
+Safe	dir	go/pkg/mod/cache	800	30
+Safe	dir	Documents/code/app/.dart_tool	300	20
+Safe	dir	Documents/code/app/.expo	100	20
+Safe	dir	Documents/code/game/Library/ShaderCache	500	10
+Safe	dir	Documents/code/game/Temp	200	10
+Safe	dir	Documents/code/site/.cache	150	10
+Safe	dir	Documents/code/site/coverage	30	30
+Safe	dir	Documents/code/api/.tox	400	60
+Safe	dir	Documents/code/ios/DerivedData	1500	10
+Safe	file	Library/Application Support/Slack/logs/app.log	20	3
+Safe	file	Documents/code/app/npm-debug.log	2	40
+Safe	file	Desktop/.DS_Store	1	1
+Safe	file	Library/Application Support/Code/User/workspaceStorage/abc/state.vscdb.backup	30	30
+# ── probably not needed ──
+Likely	dir	Library/Application Support/Code/User/workspaceStorage	900	90
+Likely	dir	Library/Application Support/MobileSync/Backup/old-iphone	8000	900
+Likely	dir	Library/Developer/Xcode/iOS DeviceSupport/15.4 (19E241)	3000	500
+Likely	dir	Library/Developer/CoreSimulator/Volumes	6000	300
+Likely	dir	Downloads/Xcode_15.app	12000	200
+Likely	dir	Downloads/old-setup	400	300
+Likely	dir	Downloads/extracted-folder-copy	800	200
+Likely	dir	.android/avd/Pixel_4_API_30.avd	8000	400
+Likely	dir	Documents/code/old/venv	700	400
+Likely	dir	Documents/code/ml/.ipynb_checkpoints	40	200
+Likely	file	Downloads/Xcode_15.xip	7000	200
+Likely	file	Downloads/iPhone15,2_17.1_Restore.ipsw	7000	200
+Likely	file	Library/iTunes/iPhone Software Updates/iPhone_17.ipsw	6000	300
+Likely	file	Downloads/ubuntu-22.04-desktop-amd64.iso	4000	300
+Likely	file	Downloads/node-v20.10.0.pkg	80	200
+Likely	file	Downloads/AnyDesk.dmg	30	100
+Likely	file	Downloads/GoogleChrome.dmg	200	60
+Likely	file	Downloads/Setup.exe	50	120
+Likely	file	Downloads/installer (1).dmg	100	90
+Likely	file	Downloads/archive (2).zip	300	120
+Likely	file	Downloads/photos-export.zip	2000	200
+Likely	file	Downloads/project-main.zip	50	200
+Likely	file	Downloads/dataset.tar.gz	1500	300
+Likely	file	Documents/backup.old	500	500
+Likely	file	Documents/report-copy.bak	20	400
+Likely	file	Library/Logs/old.crash	2	300
+Likely	file	Desktop/Screen Recording 2023-04-02 at 10.14.12.mov	900	500
+Likely	file	Desktop/Screenshot 2023-01-05 at 09.11.03.png	3	600
+Likely	file	Documents/code/web/core.12345	800	100
+Likely	file	tmp/build.tmp	200	60
+# ── review: could be big wins, but personal judgement needed ──
+Review	dir	Library/Containers/com.docker.docker/Data/vms	30000	60
+Review	dir	VirtualBox VMs/Windows 10	40000	400
+Review	dir	Parallels/Windows 11.pvm	60000	200
+Review	dir	Library/Application Support/Steam/steamapps/common/BigGame	50000	300
+Review	dir	Library/Application Support/Epic/Fortnite	30000	200
+Review	dir	Movies/Final Cut Projects/Old Edit.fcpbundle	20000	500
+Review	dir	Movies/iMovie Library.imovielibrary/Render Files	5000	400
+Review	dir	Music/GarageBand/old-project.band	3000	600
+Review	dir	Documents/Zoom/2023-03-01 Meeting	800	600
+Review	dir	Library/Application Support/Telegram Desktop/tdata/user_data	3000	30
+Review	dir	Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram/stable/account/postbox/media	4000	10
+Review	dir	Library/Containers/net.whatsapp.WhatsApp/Data	5000	5
+Review	dir	Documents/code/old-project	2000	700
+Review	dir	Documents/Archive 2021	5000	900
+Review	dir	.ollama/models	8000	60
+Review	dir	.lmstudio/models	12000	60
+Review	dir	.rustup/toolchains/nightly-2023-01-01-aarch64-apple-darwin	1200	600
+Review	dir	.nvm/versions/node/v14.21.3	200	700
+Review	dir	.pyenv/versions/3.8.18	300	600
+Review	dir	miniconda3/pkgs	4000	200
+Review	file	Documents/VMs/ubuntu.vmdk	20000	500
+Review	file	Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw	40000	5
+Review	file	Movies/lecture-recording-full.mp4	4000	400
+Review	file	Downloads/movie.mkv	3000	200
+Review	file	Documents/old-thesis-data.csv	2000	800
+Review	file	Desktop/huge-video-export.mov	8000	300
+# ── keep: personal work, app data, settings ──
+Keep	dir	Documents/University	3000	5
+Keep	dir	Documents/Thesis	800	10
+Keep	dir	Documents/code/ml-model	500	2
+Keep	dir	Documents/code/web/src	20	1
+Keep	dir	Desktop/Project	400	3
+Keep	dir	Pictures/Wallpapers	300	60
+Keep	dir	Pictures/Screenshots	200	10
+Keep	dir	Music/Music/Media.localized	8000	60
+Keep	dir	Movies/Edits	5000	20
+Keep	dir	Library/Application Support/Google/Chrome/Default/Bookmarks	1	1
+Keep	dir	Library/Application Support/Google/Chrome/Default/Extensions	80	30
+Keep	dir	Library/Application Support/Code/User/globalStorage	100	2
+Keep	dir	Library/Application Support/Code/User	50	1
+Keep	dir	Library/Application Support/Firefox/Profiles/abc.default-release	300	1
+Keep	dir	Library/Application Support/Obsidian	30	1
+Keep	dir	Library/Application Support/AddressBook	50	2
+Keep	dir	Library/Application Support/Anki2	400	1
+Keep	dir	Library/Application Support/minecraft/saves	600	30
+Keep	dir	Library/Messages/Attachments	5000	1
+Keep	dir	Library/Mail/V10	3000	1
+Keep	dir	Library/Preferences	20	1
+Keep	dir	Library/Application Support/1Password	80	1
+Keep	dir	Library/Application Support/Notion	100	1
+Keep	dir	Library/Containers/com.apple.Notes	200	1
+Keep	dir	Library/Group Containers/group.com.apple.notes	500	1
+Keep	dir	.config	20	5
+Keep	dir	.zsh_sessions	1	1
+Keep	dir	Dropbox	20000	1
+Keep	dir	Google Drive	10000	1
+Keep	file	Documents/CV.pdf	1	30
+Keep	file	Documents/Lab report.docx	3	10
+Keep	file	Documents/Anatomy Notes.pdf	50	20
+Keep	file	Desktop/design.psd	400	10
+Keep	file	Desktop/presentation.key	200	5
+Keep	file	Pictures/IMG_3332.jpeg	3	100
+Keep	file	Documents/budget.xlsx	1	30
+Keep	file	Documents/code/web/package.json	1	5
+Keep	file	.zshrc	1	30
+Keep	file	Library/Application Support/Code/User/settings.json	1	3
+Keep	file	Movies/family-video.mp4	2000	300

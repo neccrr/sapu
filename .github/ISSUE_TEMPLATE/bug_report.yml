@@ -1,0 +1,32 @@
+name: Bug report
+description: Something went wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        In Sapu, open 📜 Logs (⌘L), press Copy, and paste here.
+        Or attach `~/Library/Logs/sapu/sapu-gui.log`. Check it for paths you'd rather not share.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Sapu version and macOS version
+      placeholder: "Sapu 0.9.0, macOS 15.2, Apple Silicon"
+    validations:
+      required: true
+  - type: checkboxes
+    id: fda
+    attributes:
+      label: Setup
+      options:
+        - label: Sapu (or Terminal) has Full Disk Access

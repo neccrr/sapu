@@ -1,0 +1,15 @@
+name: Feature request
+description: An idea, a new cleanup rule, or something Sapu should recognise
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: paths
+    attributes:
+      label: Example paths (for new cleanup rules)
+      description: Which folder, which app creates it, and is it safe to delete?

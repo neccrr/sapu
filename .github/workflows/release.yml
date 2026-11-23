@@ -1,0 +1,49 @@
+name: Release
+
+# Push a tag like v0.9.0 to build a universal (Apple Silicon + Intel) Sapu.app
+# and the `sapu` command-line tool, and attach them to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build both architectures
+        run: |
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release -p sapu-gui -p sapu-cli --target "$t"
+          done
+
+      - name: Make universal binaries
+        run: |
+          mkdir -p target/release
+          for bin in sapu-gui sapu; do
+            lipo -create -output "target/release/$bin" \
+              "target/aarch64-apple-darwin/release/$bin" \
+              "target/x86_64-apple-darwin/release/$bin"
+          done
+
+      - name: Bundle Sapu.app and archives
+        run: |
+          SKIP_BUILD=1 ./scripts/bundle-macos.sh
+          cd dist
+          ditto -c -k --keepParent Sapu.app "Sapu-${GITHUB_REF_NAME}-macos-universal.zip"
+          tar czf "sapu-cli-${GITHUB_REF_NAME}-macos-universal.tar.gz" -C ../target/release sapu
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
