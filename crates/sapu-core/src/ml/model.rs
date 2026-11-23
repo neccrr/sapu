@@ -266,7 +266,7 @@ impl Model {
         let metrics = serde_json::from_slice(&meta).map_err(std::io::Error::other)?;
         let mut raw = vec![0u8; DIM * K * 4];
         f.read_exact(&mut raw)?;
-        let w = raw.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+        let w = raw.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect();
         Ok(Self { w, metrics, vocab: Vec::new() })
     }
 }
