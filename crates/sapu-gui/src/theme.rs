@@ -80,7 +80,7 @@ pub const LIGHT: Palette = Palette {
     surface: rgba(255, 255, 255, 175),
     surface_hi: rgba(255, 255, 255, 235),
     rim: rgba(255, 255, 255, 230),
-    edge: rgba(31, 30, 29, 22),
+    edge: rgba(31, 30, 29, 34),
     sheen: rgba(255, 255, 255, 90),
     shadow: rgba(60, 40, 20, 22),
     hair: rgba(31, 30, 29, 25),
@@ -117,7 +117,7 @@ pub const DARK_P: Palette = Palette {
     surface: rgba(255, 255, 255, 16),
     surface_hi: rgba(255, 255, 255, 30),
     rim: rgba(255, 255, 255, 40),
-    edge: rgba(255, 255, 255, 18),
+    edge: rgba(255, 255, 255, 32),
     sheen: rgba(255, 255, 255, 14),
     shadow: rgba(0, 0, 0, 70),
     hair: rgba(255, 255, 255, 18),
@@ -237,7 +237,19 @@ fn style_for(p: &Palette, style: &mut egui::Style) {
     w.noninteractive.fg_stroke = Stroke::new(1.0, p.text);
     w.hovered.bg_stroke = Stroke::new(1.0, p.accent.gamma_multiply(0.6));
 
-    style.spacing.item_spacing = vec2(8.0, 3.0);
+    // One type scale for the whole app. egui's default "small" (9 pt) is too
+    // small to read comfortably, so nothing goes below 11.5 pt.
+    use egui::{FontId, TextStyle};
+    style.text_styles = [
+        (TextStyle::Small, FontId::proportional(11.5)),
+        (TextStyle::Body, FontId::proportional(13.5)),
+        (TextStyle::Button, FontId::proportional(13.0)),
+        (TextStyle::Monospace, FontId::monospace(12.5)),
+        (TextStyle::Heading, FontId::new(22.0, serif_family())),
+    ]
+    .into();
+
+    style.spacing.item_spacing = vec2(8.0, 4.0);
     style.spacing.button_padding = vec2(12.0, 6.0);
     style.spacing.interact_size.y = 26.0;
     style.animation_time = 0.18;

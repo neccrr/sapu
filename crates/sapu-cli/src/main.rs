@@ -478,7 +478,7 @@ fn advise(args: &ScanArgs, clean: Option<Level>, no_ai: bool) -> Result<()> {
     }
 
     let journal = sapu_core::Journal::open();
-    let batch = journal.begin(&format!("advise --clean ({} items)", picked.len()));
+    let batch = journal.begin("Cleaned recommendations in the terminal");
     let (mut done, mut freed) = (0usize, 0u64);
     for r in picked {
         let expect = tree.root.get(&r.idx_path).map(|n| {

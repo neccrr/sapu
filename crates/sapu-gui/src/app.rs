@@ -39,16 +39,6 @@ enum SortBy {
     Items,
 }
 
-impl SortBy {
-    fn label(self) -> &'static str {
-        match self {
-            SortBy::Size => "Size",
-            SortBy::Name => "Name",
-            SortBy::Items => "Items",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Browse,
@@ -347,7 +337,6 @@ pub struct SapuApp {
     history: Vec<journal::Batch>,
     protected: Vec<PathBuf>,
     status: Option<(Status, Instant)>,
-    log_file: Option<PathBuf>,
     logs: crate::logview::LogViewer,
     /// A fresh scan running in the background while results are on screen.
     refresh: Option<(Arc<Progress>, JoinHandle<ScanResult>, Instant)>,
@@ -390,8 +379,7 @@ impl SapuApp {
             history: Vec::new(),
             protected: Vec::new(),
             status: None,
-            logs: crate::logview::LogViewer::new(buffer, log_file.clone()),
-            log_file,
+            logs: crate::logview::LogViewer::new(buffer, log_file),
             last_dark: None,
             refresh: None,
             data_usage: Vec::new(),
@@ -878,7 +866,7 @@ impl SapuApp {
         let (c2, d2, cur2) = (cancel.clone(), done.clone(), current.clone());
         let handle = std::thread::spawn(move || {
             let journal = Journal::open();
-            let batch = journal.begin(&format!("Cleaned {} recommendations", items.len()));
+            let batch = journal.begin("Cleaned recommendations");
             let mut results = Vec::new();
             for (rec, expect) in items {
                 if c2.load(Ordering::Relaxed) {
@@ -1098,7 +1086,7 @@ impl eframe::App for SapuApp {
                         None => format!("Refreshing… {} files so far", fmt::count(s.files)),
                     }
                 });
-                status_bar(ui, &self.phase, self.status.as_ref(), refreshing, self.log_file.as_deref())
+                status_bar(ui, &self.phase, self.status.as_ref(), refreshing)
             });
 
         match &mut self.phase {
@@ -1185,9 +1173,9 @@ fn tabs(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
     let reclaim = b.advice.total(Verdict::Safe) + b.advice.total(Verdict::Likely);
     let items: Vec<(Mode, String)> = vec![
         (Mode::Browse, "Browse".into()),
-        (Mode::Advice, format!("✨ Recommendations · {}", fmt::size(reclaim))),
-        (Mode::Cloud, "☁ iCloud".into()),
-        (Mode::Safety, "🛡 Safety".into()),
+        (Mode::Advice, format!("Recommendations · {}", fmt::size(reclaim))),
+        (Mode::Cloud, "iCloud".into()),
+        (Mode::Safety, "Safety".into()),
     ];
     let font = FontId::proportional(13.0);
     let pad = Vec2::new(14.0, 6.0);
@@ -1236,15 +1224,15 @@ fn tabs(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
     }
 }
 
-/// "📜 Logs" button; turns amber/red when warnings/errors were logged.
+/// Logs button; shows a count and turns amber/red when warnings/errors were logged.
 fn logs_button(ui: &mut Ui, counts: (usize, usize), actions: &mut Vec<Action>) {
     let (errors, warnings) = counts;
     let (label, color) = if errors > 0 {
-        (format!("📜 Logs · {errors}"), pal().bad)
+        (format!("Logs · {errors}"), pal().bad)
     } else if warnings > 0 {
-        (format!("📜 Logs · {warnings}"), pal().warn)
+        (format!("Logs · {warnings}"), pal().warn)
     } else {
-        ("📜 Logs".to_string(), pal().text)
+        ("Logs".to_string(), pal().text)
     };
     if ui
         .button(RichText::new(label).color(color))
@@ -1255,6 +1243,8 @@ fn logs_button(ui: &mut Ui, counts: (usize, usize), actions: &mut Vec<Action>) {
     }
 }
 
+/// Title row: brand, tabs, and the same global actions on every tab.
+/// Browse adds a second row with the path and the folder's size.
 fn top_bar(ui: &mut Ui, root: &Path, phase: &Phase, log_counts: (usize, usize), actions: &mut Vec<Action>) {
     // The bar doubles as the window's title bar: drag it to move the window.
     let drag = ui.interact(ui.max_rect(), ui.make_persistent_id("drag-window"), Sense::click_and_drag());
@@ -1269,97 +1259,71 @@ fn top_bar(ui: &mut Ui, root: &Path, phase: &Phase, log_counts: (usize, usize), 
     ui.horizontal(|ui| {
         ui.label(serif("Sapu", 21.0).color(pal().accent));
         ui.add_space(14.0);
-        if let Phase::Ready(b) = phase {
-            tabs(ui, b, actions);
-            ui.add_space(12.0);
-            if b.mode != Mode::Browse {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("⟳  Rescan").on_hover_text("⌘R · also retrains Sapu AI").clicked() {
-                        actions.push(Action::Rescan);
-                    }
-                    logs_button(ui, log_counts, actions);
-                });
-                return;
+        match phase {
+            Phase::Ready(b) => tabs(ui, b, actions),
+            _ => {
+                ui.label(RichText::new(fmt::tilde(root)).color(pal().text2));
             }
         }
-
-        if let Phase::Ready(b) = phase {
-            let back = ui.add_enabled(!b.path.is_empty(), egui::Button::new("⬅"));
-            if back.on_hover_text("Back (⌫)").clicked() {
-                actions.push(Action::Back);
-            }
-            // Breadcrumb
-            let root_label = fmt::tilde(&b.tree.root_path);
-            if ui.add(egui::Button::new(RichText::new(root_label).strong()).frame(false)).clicked() {
-                actions.push(Action::GoToDepth(0));
-            }
-            let mut node = &b.tree.root;
-            for (depth, &i) in b.path.iter().enumerate() {
-                node = &node.children[i];
-                ui.label(RichText::new("›").color(pal().dim));
-                let last = depth + 1 == b.path.len();
-                let text = RichText::new(&*node.name);
-                let text = if last { text.strong().color(pal().accent) } else { text };
-                if ui.add(egui::Button::new(text).frame(false)).clicked() {
-                    actions.push(Action::GoToDepth(depth + 1));
-                }
-            }
-        } else {
-            ui.label(RichText::new(fmt::tilde(root)).strong());
-        }
-
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             logs_button(ui, log_counts, actions);
-            if ui.button("⟳ Rescan").on_hover_text("⌘R").clicked() {
+            let ready = matches!(phase, Phase::Ready(_));
+            if ui.add_enabled(ready, egui::Button::new("Rescan")).on_hover_text("⌘R · also retrains Sapu AI").clicked()
+            {
                 actions.push(Action::Rescan);
             }
-            if ui.button("📂 Open Folder…").on_hover_text("⌘O").clicked() {
+            if ui.button("Open Folder…").on_hover_text("Scan a different folder (⌘O)").clicked() {
                 actions.push(Action::ChooseFolder);
-            }
-            if let Phase::Ready(b) = phase {
-                ui.add_space(8.0);
-                let mut sort = b.sort;
-                egui::ComboBox::from_id_salt("sort").selected_text(format!("Sort: {}", sort.label())).show_ui(
-                    ui,
-                    |ui| {
-                        for s in [SortBy::Size, SortBy::Name, SortBy::Items] {
-                            ui.selectable_value(&mut sort, s, s.label());
-                        }
-                    },
-                );
-                if sort != b.sort {
-                    actions.push(Action::SetSort(sort));
-                }
             }
         });
     });
 
-    if let Phase::Ready(b) = phase {
-        if b.mode != Mode::Browse {
-            return;
-        }
-        let node = b.current();
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.label(serif(fmt::size(node.size), 30.0));
-            ui.label(RichText::new(format!("{} items in this folder", fmt::count(node.files))).color(pal().dim));
-            if node.incomplete {
-                ui.label(RichText::new("⚠ some items unreadable").color(pal().warn));
-            }
-            if b.tree.stats.cancelled {
-                ui.label(RichText::new("⏸ partial scan").color(pal().warn));
-            }
-        });
+    let Phase::Ready(b) = phase else { return };
+    if b.mode != Mode::Browse {
+        return;
     }
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        let back = ui.add_enabled(!b.path.is_empty(), egui::Button::new("‹").min_size(Vec2::new(28.0, 24.0)));
+        if back.on_hover_text("Back (⌫)").clicked() {
+            actions.push(Action::Back);
+        }
+        ui.add_space(2.0);
+        // Breadcrumb: every part is clickable, the current folder is highlighted.
+        let crumb = |ui: &mut Ui, text: String, current: bool| {
+            let t = RichText::new(text);
+            let t = if current { t.strong().color(pal().text) } else { t.color(pal().text2) };
+            ui.add(egui::Button::new(t).frame(false)).on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+        };
+        if crumb(ui, fmt::tilde(&b.tree.root_path), b.path.is_empty()) {
+            actions.push(Action::GoToDepth(0));
+        }
+        let mut node = &b.tree.root;
+        for (depth, &i) in b.path.iter().enumerate() {
+            node = &node.children[i];
+            ui.label(RichText::new("›").color(pal().dim));
+            if crumb(ui, node.name.to_string(), depth + 1 == b.path.len()) {
+                actions.push(Action::GoToDepth(depth + 1));
+            }
+        }
+    });
+    let node = b.current();
+    ui.horizontal(|ui| {
+        ui.label(serif(fmt::size(node.size), 30.0));
+        let files = if node.files == 1 { "1 file".to_string() } else { format!("{} files", fmt::count(node.files)) };
+        ui.label(RichText::new(files).color(pal().dim));
+        if node.incomplete {
+            ui.label(RichText::new("· some items couldn't be read").color(pal().warn))
+                .on_hover_text("Sapu had no permission for some folders. Sizes may be a little low.");
+        }
+        if b.tree.stats.cancelled {
+            ui.label(RichText::new("· partial scan").color(pal().warn))
+                .on_hover_text("You stopped the scan early. Rescan (⌘R) for full results.");
+        }
+    });
 }
 
-fn status_bar(
-    ui: &mut Ui,
-    phase: &Phase,
-    status: Option<&(Status, Instant)>,
-    refreshing: Option<String>,
-    log: Option<&Path>,
-) {
+fn status_bar(ui: &mut Ui, phase: &Phase, status: Option<&(Status, Instant)>, refreshing: Option<String>) {
     if let (Some(msg), None) = (&refreshing, status) {
         ui.horizontal(|ui| {
             ui.add(egui::Spinner::new().size(12.0).color(pal().accent));
@@ -1382,17 +1346,27 @@ fn status_bar(
             Some((Status::Ok(m), _)) => {
                 let (a, dx) = fade.unwrap_or((1.0, 0.0));
                 ui.add_space(dx);
-                ui.label(RichText::new(format!("✓ {m}")).color(pal().ok.gamma_multiply(a)));
+                ui.label(RichText::new(format!("✓ {m}")).small().color(pal().ok.gamma_multiply(a)));
             }
             Some((Status::Err(m), _)) => {
                 let (a, dx) = fade.unwrap_or((1.0, 0.0));
                 ui.add_space(dx);
-                ui.label(RichText::new(format!("⚠ {m}")).color(pal().warn.gamma_multiply(a)));
+                ui.label(RichText::new(format!("⚠ {m}")).small().color(pal().warn.gamma_multiply(a)));
             }
             None => {
-                let hint =
-                    "Double-click to open · ⌫ back · ⌘⌫ move to Trash · ⌘⏎ reveal in Finder · right-click for more";
-                ui.label(RichText::new(hint).color(pal().dim).small());
+                let hint = match phase {
+                    Phase::Ready(b) => match b.mode {
+                        Mode::Browse => {
+                            "Double-click to open · ⌫ back · ⌘⌫ move to Trash · ⌘⏎ show in Finder · right-click for more"
+                        }
+                        Mode::Advice => "Tick what you want gone, then Move to Trash · Keep hides an item and teaches Sapu AI",
+                        Mode::Cloud => "Remove download frees space here and keeps the file in iCloud",
+                        Mode::Safety => "Everything Sapu cleans can be put back from here",
+                    },
+                    Phase::Scanning { .. } => "Esc stops the scan and shows what was found so far",
+                    Phase::Failed(_) => "",
+                };
+                ui.label(RichText::new(hint).small().color(pal().dim));
             }
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1400,17 +1374,14 @@ fn status_bar(
                 let st = &b.tree.stats;
                 ui.label(
                     RichText::new(format!(
-                        "{} files · {} folders · {:.1}s",
+                        "{} files · {} folders · scanned in {:.1}s",
                         fmt::count(st.files),
                         fmt::count(st.dirs),
                         st.elapsed.as_secs_f64()
                     ))
-                    .color(pal().dim)
-                    .small(),
+                    .small()
+                    .color(pal().dim),
                 );
-            }
-            if let Some(p) = log {
-                ui.label(RichText::new("log").color(pal().dim).small()).on_hover_text(fmt::tilde(p));
             }
         });
     });
@@ -1475,14 +1446,30 @@ fn list_view(ui: &mut Ui, b: &mut Browser, actions: &mut Vec<Action>) {
     let node = b.tree.root.get(&b.path).unwrap_or(&b.tree.root);
     let total = node.size;
 
-    // Column header
-    let header_font = FontId::proportional(11.0);
-    let (hrect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
+    // Column headers double as sort buttons.
+    let (hrect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 20.0), Sense::hover());
     let cols = Columns::new(hrect);
-    let p = ui.painter();
-    p.text(cols.size_right(hrect), Align2::RIGHT_CENTER, "SIZE", header_font.clone(), pal().dim);
-    p.text(cols.name_left(hrect), Align2::LEFT_CENTER, "NAME", header_font.clone(), pal().dim);
-    p.text(cols.items_right(hrect), Align2::RIGHT_CENTER, "ITEMS", header_font, pal().dim);
+    let header = |ui: &mut Ui, pos: egui::Pos2, align: Align2, label: &str, by: SortBy, actions: &mut Vec<Action>| {
+        let active = b.sort == by;
+        let text = if active { format!("{label} ▾") } else { label.to_string() };
+        let font = FontId::proportional(11.5);
+        let galley = ui.painter().layout_no_wrap(text, font, pal().dim);
+        let rect = align.anchor_size(pos, galley.size()).expand2(Vec2::new(4.0, 2.0));
+        let resp = ui.interact(rect, ui.make_persistent_id(("sort", label)), Sense::click());
+        let col = if active || resp.hovered() { pal().text } else { pal().dim };
+        ui.painter().galley_with_override_text_color(rect.min + Vec2::new(4.0, 2.0), galley, col);
+        if resp
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(format!("Sort by {}", label.to_lowercase()))
+            .clicked()
+            && !active
+        {
+            actions.push(Action::SetSort(by));
+        }
+    };
+    header(ui, cols.size_right(hrect), Align2::RIGHT_CENTER, "Size", SortBy::Size, actions);
+    header(ui, cols.name_left(hrect), Align2::LEFT_CENTER, "Name", SortBy::Name, actions);
+    header(ui, cols.items_right(hrect), Align2::RIGHT_CENTER, "Files", SortBy::Items, actions);
     ui.separator();
 
     if node.children.is_empty() {
@@ -1561,7 +1548,9 @@ fn list_view(ui: &mut Ui, b: &mut Browser, actions: &mut Vec<Action>) {
             );
 
             // Verdict badge
-            if let Some(Some(jd)) = b.verdicts.get(ci) {
+            if let Some(Some(jd)) =
+                b.verdicts.get(ci).filter(|j| j.as_ref().is_some_and(|j| j.verdict != Verdict::Keep))
+            {
                 let pr = cols.pill_rect(rect);
                 paint_pill(p, pr, jd);
                 ui.interact(pr, ui.make_persistent_id(("pill", ci)), Sense::hover()).on_hover_text_at_pointer(format!(
@@ -1919,19 +1908,20 @@ fn advice_view(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
             let ai_n = adv.items.iter().filter(|r| r.judgement.is_ai()).count();
             ui.label(
                 RichText::new(format!(
-                    "🧠 Sapu AI · trained on this Mac in {} ms · {} examples ({} from your choices) · {:.0}% right on items it hadn't seen · {} guesses below, never ticked automatically",
-                    mt.train_ms,
+                    "Sapu AI · {:.0}% right on items it hadn't seen · learned from {} examples ({} of your choices) · {} AI {} below, never ticked for you",
+                    mt.holdout_accuracy * 100.0,
                     fmt::count(mt.examples as u64),
                     mt.from_feedback,
-                    mt.holdout_accuracy * 100.0,
-                    ai_n
+                    ai_n,
+                    if ai_n == 1 { "guess" } else { "guesses" },
                 ))
                 .small()
                 .color(pal().ai),
-            );
+            )
+            .on_hover_text(format!("Trained on this Mac in {} ms. Nothing leaves your Mac.", mt.train_ms));
         }
         None => {
-            ui.label(RichText::new("🧠 Sapu AI is off").small().color(pal().dim));
+            ui.label(RichText::new("Sapu AI is off").small().color(pal().dim));
         }
     }
     ui.add_space(8.0);
@@ -1973,7 +1963,8 @@ fn advice_view(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
     if adv.items.is_empty() {
         ui.vertical_centered(|ui| {
             ui.add_space(60.0);
-            ui.label(RichText::new("Nothing to clean here. Nice and tidy ✨").size(16.0).color(pal().dim));
+            ui.label(serif("Nothing to clean here", 20.0));
+            ui.label(RichText::new("Sapu found nothing it would remove. Nice and tidy.").color(pal().dim));
         });
         return;
     }
@@ -1998,12 +1989,26 @@ fn advice_view(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
     });
 }
 
+/// Width reserved for sizes on the right of cards, so buttons line up.
+const SIZE_COL: f32 = 104.0;
+
+fn size_label(ui: &mut Ui, bytes: u64) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(SIZE_COL, 24.0), Sense::hover());
+    ui.painter().text(
+        rect.right_center(),
+        Align2::RIGHT_CENTER,
+        fmt::size(bytes),
+        FontId::new(17.0, theme::serif_family()),
+        pal().text,
+    );
+}
+
 fn rec_row(ui: &mut Ui, b: &Browser, i: usize, actions: &mut Vec<Action>) {
     let rec = &b.advice.items[i];
     let jd = &rec.judgement;
     let auto = rec.is_automatic();
     let tint = (b.checked[i] && auto).then(|| pal().row_sel);
-    glass(ui, 14, egui::Margin::symmetric(12, 9), tint, |ui| {
+    glass(ui, 14, egui::Margin::symmetric(14, 10), tint, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             let mut ticked = b.checked[i] && auto;
@@ -2014,39 +2019,40 @@ fn rec_row(ui: &mut Ui, b: &Browser, i: usize, actions: &mut Vec<Action>) {
             if !auto {
                 cb.on_disabled_hover_text("Sapu can't do this one for you. See the note.");
             }
+            ui.add_space(2.0);
 
-            let (pr, _) = ui.allocate_exact_size(Vec2::new(54.0, 18.0), Sense::hover());
-            paint_pill(ui.painter(), pr, jd);
-
+            // Leave room on the right for the buttons and the size.
+            let text_w = (ui.available_width() - SIZE_COL - 130.0).max(160.0);
             ui.vertical(|ui| {
+                ui.set_width(text_w);
                 let name = rec.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(name).strong());
+                    ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
                     if jd.is_ai() {
-                        ui.label(RichText::new("🧠 AI guess").small().color(pal().ai));
+                        ui.label(RichText::new("AI guess").small().color(pal().ai))
+                            .on_hover_text("Sapu AI's guess. Not ticked unless you tick it.");
                     } else {
                         ui.label(RichText::new(jd.category.label()).small().color(pal().dim));
                     }
                 });
                 let parent = rec.path.parent().map(fmt::tilde).unwrap_or_default();
-                ui.add(egui::Label::new(RichText::new(parent).size(11.0).color(pal().dim)).truncate());
-                let note = if auto { jd.reason.clone() } else { format!("👉 {}", jd.reason) };
+                ui.add(egui::Label::new(RichText::new(parent).small().color(pal().dim)).truncate());
+                let note = if auto { jd.reason.clone() } else { format!("You do this one: {}", jd.reason) };
                 ui.add(egui::Label::new(RichText::new(note).small().color(pal().text2)).wrap());
             });
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(serif(fmt::size(rec.size), 17.0));
-                ui.add_space(6.0);
-                if ui.small_button("Show").on_hover_text("Find it in the browser").clicked() {
-                    actions.push(Action::ShowRec(i));
-                }
+                size_label(ui, rec.size);
                 if ui.small_button("Keep").on_hover_text("Not this one. Hides it and teaches Sapu AI.").clicked() {
                     actions.push(Action::RejectRec(i));
+                }
+                if ui.small_button("Show").on_hover_text("Find it in Browse").clicked() {
+                    actions.push(Action::ShowRec(i));
                 }
             });
         });
     });
-    ui.add_space(4.0);
+    ui.add_space(6.0);
 }
 
 fn batch_dialog(ctx: &egui::Context, bc: &mut BatchConfirm) -> Option<bool> {
@@ -2059,7 +2065,7 @@ fn batch_dialog(ctx: &egui::Context, bc: &mut BatchConfirm) -> Option<bool> {
         ui.label(
             RichText::new(
                 "Before each one, Sapu re-checks it hasn't changed since the scan and skips it if it has. \
-                 Folders like Caches are emptied, not removed. Everything can be undone from 🛡 Safety.",
+                 Folders like Caches are emptied, not removed. Everything can be undone from the Safety tab.",
             )
             .color(pal().dim),
         );
@@ -2170,17 +2176,25 @@ fn cloud_view(ui: &mut Ui, b: &Browser, actions: &mut Vec<Action>) {
 
 fn cloud_row(ui: &mut Ui, item: &icloud::CloudItem, downloaded: bool, actions: &mut Vec<Action>) {
     let p = pal();
-    glass(ui, 14, egui::Margin::symmetric(14, 9), None, |ui| {
+    glass(ui, 14, egui::Margin::symmetric(14, 10), None, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.label(RichText::new(if downloaded { "⬇" } else { "☁" }).size(16.0).color(if downloaded {
-                p.accent
-            } else {
-                p.link
-            }));
+            ui.allocate_ui_with_layout(
+                Vec2::new(20.0, 24.0),
+                Layout::centered_and_justified(egui::Direction::TopDown),
+                |ui| {
+                    ui.label(RichText::new(if downloaded { "⬇" } else { "☁" }).size(16.0).color(if downloaded {
+                        p.accent
+                    } else {
+                        p.link
+                    }));
+                },
+            );
+            let text_w = (ui.available_width() - SIZE_COL - 260.0).max(160.0);
             ui.vertical(|ui| {
+                ui.set_width(text_w);
                 let name = item.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                ui.label(RichText::new(name).strong());
+                ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
                 let parent = item.path.parent().map(fmt::tilde).unwrap_or_default();
                 let age = sapu_core::judge::human_age(
                     std::time::SystemTime::now()
@@ -2191,26 +2205,26 @@ fn cloud_row(ui: &mut Ui, item: &icloud::CloudItem, downloaded: bool, actions: &
                         / 86_400,
                 );
                 let when = if age == "today" { "changed today".to_string() } else { format!("changed {age} ago") };
-                ui.add(
-                    egui::Label::new(RichText::new(format!("{parent} · {when}")).size(11.0).color(p.dim)).truncate(),
-                );
+                ui.add(egui::Label::new(RichText::new(format!("{parent} · {when}")).small().color(p.dim)).truncate());
             });
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let size = if downloaded { item.on_mac } else { item.in_cloud };
-                ui.label(serif(fmt::size(size), 17.0));
-                ui.add_space(6.0);
+                size_label(ui, if downloaded { item.on_mac } else { item.in_cloud });
+                // Fixed-width primary button so rows line up.
+                let primary = if downloaded { "Remove download" } else { "Download" };
+                let btn = egui::Button::new(primary).min_size(Vec2::new(132.0, 26.0));
                 if downloaded {
-                    if ui.button("Remove download").on_hover_text("Frees the space here. Stays in iCloud.").clicked() {
+                    if ui.add(btn).on_hover_text("Frees the space here. Stays in iCloud.").clicked() {
                         actions.push(Action::Evict(item.idx_path.clone()));
                     }
-                } else if ui.button("Download").clicked() {
+                } else if ui.add(btn).on_hover_text("Download it to this Mac").clicked() {
                     actions.push(Action::Download(item.idx_path.clone()));
                 }
                 if ui.small_button("Show").clicked() {
                     actions.push(Action::ShowIdx(item.idx_path.clone()));
                 }
+                ui.add_space(4.0);
                 if ui
-                    .small_button(RichText::new("Delete…").color(pal().bad))
+                    .add(egui::Button::new(RichText::new("Delete…").small().color(pal().bad)).frame(false))
                     .on_hover_text("Delete from iCloud on all devices (asks for consent first)")
                     .clicked()
                 {
@@ -2219,7 +2233,7 @@ fn cloud_row(ui: &mut Ui, item: &icloud::CloudItem, downloaded: bool, actions: &
             });
         });
     });
-    ui.add_space(4.0);
+    ui.add_space(6.0);
 }
 
 fn job_dialog(ctx: &egui::Context, job: &Job, actions: &mut Vec<Action>) {
@@ -2254,7 +2268,7 @@ fn safety_view(
 ) {
     egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.label(serif("How Sapu keeps you safe", 22.0));
-        ui.add_space(4.0);
+        ui.add_space(6.0);
         for line in [
             "Everything goes to the Trash first. Nothing is ever deleted outright.",
             "Every action is written to a journal before it happens, and can be undone below.",
@@ -2264,13 +2278,17 @@ fn safety_view(
             "AI guesses and Review items are never ticked for you.",
             "Nothing in iCloud is deleted without your explicit consent, item by item.",
         ] {
-            ui.label(RichText::new(format!("✓  {line}")).color(pal().text2));
+            let mut job = egui::text::LayoutJob::default();
+            let body = egui::TextStyle::Body.resolve(ui.style());
+            job.append("✓   ", 0.0, egui::TextFormat::simple(body.clone(), pal().ok));
+            job.append(line, 0.0, egui::TextFormat::simple(body, pal().text2));
+            ui.label(job);
         }
 
-        ui.add_space(16.0);
+        ui.add_space(18.0);
         ui.label(serif("Protected by you", 19.0));
         if protected.is_empty() {
-            ui.label(RichText::new("Nothing yet. Right-click anything in Browse → 🛡 Protect.").color(pal().dim));
+            ui.label(RichText::new("Nothing yet. Right-click anything in Browse and choose Protect.").color(pal().dim));
         }
         for p in protected {
             ui.horizontal(|ui| {
@@ -2281,90 +2299,123 @@ fn safety_view(
             });
         }
 
-        ui.add_space(16.0);
+        ui.add_space(18.0);
         ui.label(serif("Data on this Mac", 19.0));
         ui.label(
             RichText::new("Sapu keeps everything locally, never inside the app and never online. Updating Sapu keeps it.")
                 .color(pal().text2),
         );
-        ui.add_space(4.0);
-        for u in usage {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(u.label).strong());
-                ui.label(RichText::new(format!("{} · {}", fmt::size(u.bytes), u.note)).color(pal().dim));
-                ui.label(RichText::new(fmt::tilde(&u.path)).small().color(pal().dim).monospace());
-                if ui.small_button("Show").clicked() {
-                    actions.push(Action::RevealPath(u.path.clone()));
-                }
-                if u.clearable && u.bytes > 0 && ui.small_button("Clear").on_hover_text("Safe: it's only a cache").clicked() {
-                    actions.push(Action::ClearCache);
+        ui.add_space(6.0);
+        glass(ui, 14, egui::Margin::symmetric(14, 10), None, |ui| {
+            ui.set_width(ui.available_width());
+            egui::Grid::new("data-usage").num_columns(4).spacing([18.0, 8.0]).show(ui, |ui| {
+                for u in usage {
+                    ui.label(RichText::new(u.label).strong());
+                    ui.label(fmt::size(u.bytes));
+                    ui.vertical(|ui| {
+                        ui.add(egui::Label::new(RichText::new(u.note).small().color(pal().text2)).extend());
+                        ui.add(
+                            egui::Label::new(RichText::new(fmt::tilde(&u.path)).small().monospace().color(pal().dim))
+                                .extend(),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Show").on_hover_text("Open in Finder").clicked() {
+                            actions.push(Action::RevealPath(u.path.clone()));
+                        }
+                        if u.clearable
+                            && u.bytes > 0
+                            && ui.small_button("Clear").on_hover_text("Safe: it's only a cache").clicked()
+                        {
+                            actions.push(Action::ClearCache);
+                        }
+                    });
+                    ui.end_row();
                 }
             });
-        }
+        });
 
-        ui.add_space(16.0);
+        ui.add_space(18.0);
         ui.label(serif("History", 19.0));
         if history.is_empty() {
             ui.label(RichText::new("Nothing cleaned yet.").color(pal().dim));
         }
+        ui.add_space(4.0);
         for b in history.iter().take(50) {
             glass(ui, 14, egui::Margin::symmetric(14, 10), None, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(&b.label).strong());
-                            let failed = b.count(ItemState::Failed);
-                            let restored = b.count(ItemState::Restored);
-                            let unknown = b.count(ItemState::Unknown);
-                            let mut parts = vec![
-                                fmt::ago(b.time),
-                                format!("{} items", b.items.len()),
-                                format!("{} to Trash", fmt::size(b.bytes_trashed())),
-                            ];
-                            if failed > 0 {
-                                parts.push(format!("{failed} skipped"));
-                            }
-                            if restored > 0 {
-                                parts.push(format!("{restored} restored"));
-                            }
-                            if unknown > 0 {
-                                parts.push(format!("{unknown} interrupted"));
-                            }
-                            ui.label(RichText::new(parts.join(" · ")).small().color(pal().dim));
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            let n = b.restorable();
-                            let btn = egui::Button::new(format!("↩ Undo ({n})"));
-                            if ui
-                                .add_enabled(n > 0, btn)
-                                .on_disabled_hover_text("Nothing left to restore from the Trash (already restored, emptied, or location unknown: use Finder → Put Back)")
-                                .clicked()
-                            {
-                                actions.push(Action::Undo(b.id));
-                            }
-                        });
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new(batch_title(&b.label)).strong());
+                        let failed = b.count(ItemState::Failed);
+                        let restored = b.count(ItemState::Restored);
+                        let unknown = b.count(ItemState::Unknown);
+                        let n = b.items.len();
+                        let mut parts = vec![
+                            fmt::ago(b.time),
+                            if n == 1 { "1 item".to_string() } else { format!("{n} items") },
+                            format!("{} to Trash", fmt::size(b.bytes_trashed())),
+                        ];
+                        if failed > 0 {
+                            parts.push(format!("{failed} skipped"));
+                        }
+                        if restored > 0 {
+                            parts.push(format!("{restored} put back"));
+                        }
+                        if unknown > 0 {
+                            parts.push(format!("{unknown} interrupted"));
+                        }
+                        ui.label(RichText::new(parts.join(" · ")).small().color(pal().dim));
                     });
-                    egui::CollapsingHeader::new(RichText::new("Details").small())
-                        .id_salt(("batch", b.id))
-                        .show(ui, |ui| {
-                            for it in b.items.iter().take(200) {
-                                let (icon, col) = match it.state {
-                                    ItemState::Trashed => ("🗑", pal().dim),
-                                    ItemState::Restored => ("↩", pal().ok),
-                                    ItemState::Failed => ("⚠", pal().warn),
-                                    ItemState::Unknown => ("?", pal().warn),
-                                };
-                                let mut t = format!("{icon} {}  {}", fmt::size(it.bytes), fmt::tilde(&it.path));
-                                if it.state == ItemState::Failed && !it.note.is_empty() {
-                                    t.push_str(&format!(" ({})", it.note));
-                                }
-                                ui.label(RichText::new(t).small().color(col));
-                            }
-                        });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let n = b.restorable();
+                        let label = match n {
+                            0 => "Undo".to_string(),
+                            1 => "Undo · put 1 item back".to_string(),
+                            n => format!("Undo · put {n} items back"),
+                        };
+                        if ui
+                            .add_enabled(n > 0, egui::Button::new(label))
+                            .on_disabled_hover_text("Nothing left to put back (already restored, emptied from the Trash, or moved: use Finder → Put Back)")
+                            .clicked()
+                        {
+                            actions.push(Action::Undo(b.id));
+                        }
+                    });
                 });
-            ui.add_space(4.0);
+                egui::CollapsingHeader::new(RichText::new("What was cleaned").small().color(pal().text2))
+                    .id_salt(("batch", b.id))
+                    .show(ui, |ui| {
+                        for it in b.items.iter().take(200) {
+                            let (icon, col) = match it.state {
+                                ItemState::Trashed => ("🗑", pal().text2),
+                                ItemState::Restored => ("↩", pal().ok),
+                                ItemState::Failed => ("⚠", pal().warn),
+                                ItemState::Unknown => ("?", pal().warn),
+                            };
+                            let mut t = format!("{icon}  {}  {}", fmt::size(it.bytes), fmt::tilde(&it.path));
+                            if it.state == ItemState::Failed && !it.note.is_empty() {
+                                t.push_str(&format!(" ({})", it.note));
+                            }
+                            ui.add(egui::Label::new(RichText::new(t).small().color(col)).truncate());
+                        }
+                    });
+            });
+            ui.add_space(6.0);
         }
+        ui.add_space(20.0);
     });
+}
+
+/// Friendly title for a journal batch. Older versions of the CLI used the raw command.
+fn batch_title(label: &str) -> String {
+    if label.starts_with("advise --clean") {
+        return "Cleaned recommendations in the terminal".to_string();
+    }
+    match label.strip_prefix("Cleaned ").and_then(|r| r.strip_suffix(" recommendations")) {
+        Some(n) if n.parse::<u32>().is_ok() => "Cleaned recommendations".to_string(),
+        _ => label.to_string(),
+    }
 }
 
 /// Some(true) = confirmed, Some(false) = cancelled, None = still open.

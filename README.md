@@ -78,9 +78,9 @@ The log says at startup whether Sapu has it.
 | Tab | What it's for |
 |---|---|
 | **Browse** | Explore your disk. Double-click to open a folder, ⌫ to go back, right-click for actions. |
-| **✨ Recommendations** | What's worth cleaning and why. Tick, then *Move to Trash*. |
-| **☁ iCloud** | Downloaded vs cloud-only. *Remove download*, *Download*, or *Delete…* (with consent). |
-| **🛡 Safety** | What Sapu will never touch, your protected list, and History with **Undo**. |
+| **Recommendations** | What's worth cleaning and why. Tick, then *Move to Trash*. |
+| **iCloud** | Downloaded vs cloud-only. *Remove download*, *Download*, or *Delete…* (with consent). |
+| **Safety** | What Sapu will never touch, your protected list, and History with **Undo**. |
 
 | Key | Action |
 |---|---|
@@ -152,12 +152,12 @@ Every removal passes through these layers:
 7. **Write-ahead journal.** Each item is logged *before* it's touched, then logged with
    where it landed in the Trash.
 8. **Trash only.** Nothing is ever deleted outright.
-9. **Undo.** 🛡 Safety → *Undo*, or `sapu undo`, puts a whole batch back. (It can't bring
+9. **Undo.** Safety → *Undo*, or `sapu undo`, puts a whole batch back. (It can't bring
    back what you've already emptied from the Trash.)
 
 ## Logs
 
-📜 **Logs** (⌘L) opens a live log window with level filters, search and copy. The full log
+**Logs** (⌘L) opens a live log window with level filters, search and copy. The full log
 is at `~/Library/Logs/sapu/sapu-gui.log` (open it in Console.app). `SAPU_LOG=debug` for more
 detail. When reporting a bug, Logs → Copy is the most useful thing to include.
 
@@ -177,7 +177,7 @@ version of the app keeps it all.
 ~/Library/Logs/sapu/                  sapu-gui.log, sapu.log (rotated at 10 MB)
 ```
 
-See sizes and open these folders in **🛡 Safety → Data on this Mac**, or run `sapu data`.
+See sizes and open these folders in **Safety → Data on this Mac**, or run `sapu data`.
 To remove Sapu completely, delete Sapu.app and those three `sapu` folders.
 
 ## Options

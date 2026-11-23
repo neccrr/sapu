@@ -8,6 +8,18 @@
   `safety/`, `Caches/sapu/`, `Logs/sapu/` (rotated at 10 MB). Old files move automatically.
 - "Data on this Mac" in the Safety tab, and `sapu data [--clear-cache]`.
 - Bundle ID is now `io.github.neccrr.sapu`.
+- **UI cleanup:**
+  - one type scale, with no text below 11.5 pt;
+  - the same Open Folder / Rescan / Logs buttons on every tab;
+  - Browse has its own path row;
+  - click the column headers to sort (this replaces the Sort menu);
+  - "Keep" badges no longer clutter the file list;
+  - recommendation cards drop the repeated verdict badge;
+  - sizes and buttons line up in Recommendations and iCloud;
+  - Delete… in iCloud is quieter;
+  - a tidier Safety tab, with a table for "Data on this Mac" and clearer Undo;
+  - status bar hints change with the tab;
+  - emoji icons that rendered as odd glyphs are gone.
 
 ## 0.9.0
 - **iCloud delete with consent.** Items in iCloud can now be deleted, but only after an
