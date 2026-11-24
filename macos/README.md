@@ -285,6 +285,9 @@ The script:
 After the first build you can also open `macos/SapuShell/Package.swift` in Xcode. CI builds the
 shell on every pull request.
 
+How the shell compares with Sapu.app (speed, memory, idle CPU, glass on or off) is in
+[docs/performance.md](../docs/performance.md).
+
 ## Not done yet
 
 - **Treemap** in the SwiftUI shell. Browse is a list for now; Sapu.app has the treemap.
