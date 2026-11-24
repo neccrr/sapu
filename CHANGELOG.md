@@ -19,6 +19,8 @@
   Releases include it (universal, and signed and notarized when the secrets are set). Build
   it yourself with `./macos/build-shell.sh`. CI builds it on every pull request.
 - The release workflow no longer fails with "Permission denied" on the bundle step.
+- SapuShell uses Liquid Glass on macOS 26 (floating status and action bars, banners, buttons), with a
+  material fallback on older macOS.
 - CI uploads Sapu.app and SapuShell.app (Apple Silicon) as downloadable artifacts on every run.
 
 ## 0.10.0
