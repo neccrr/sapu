@@ -91,8 +91,9 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                StatusBar()
             }
+            // Content scrolls under the floating glass status bar.
+            .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
             .toolbar {
                 ToolbarItemGroup {
                     Button { model.chooseFolder() } label: { Label("Open Folder", systemImage: "folder.badge.plus") }
@@ -115,11 +116,14 @@ struct FullDiskAccessNotice: View {
                 .lineLimit(2)
             Spacer()
             Button("Open Settings") { Finder.openFullDiskAccessSettings() }
+                .glassButton()
         }
         .font(.callout)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.5))
+        .glassPanel()
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
     }
 }
 
@@ -133,11 +137,16 @@ struct StartView: View {
             Text(model.rootPath)
                 .font(.callout.monospaced())
                 .foregroundStyle(.secondary)
-            HStack {
-                Button("Scan") { model.scan() }
-                    .keyboardShortcut(.defaultAction)
-                Button("Choose Folder…") { model.chooseFolder() }
+            GlassGroup {
+                HStack {
+                    Button("Scan") { model.scan() }
+                        .keyboardShortcut(.defaultAction)
+                        .glassButton(prominent: true)
+                    Button("Choose Folder…") { model.chooseFolder() }
+                        .glassButton()
+                }
             }
+            .controlSize(.large)
             Text("Everything Sapu cleans goes to the Trash first, and you can undo it in Safety.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -167,7 +176,11 @@ struct ScanningView: View {
                 Text("Starting…")
             }
             Button("Stop") { model.cancel() }
+                .glassButton()
         }
+        .padding(24)
+        .frame(minWidth: 360)
+        .glassPanel(cornerRadius: 22)
         .padding()
     }
 }
@@ -186,6 +199,7 @@ struct StatusBar: View {
                     .lineLimit(2)
                 Button("Dismiss") { model.notice = nil }
                     .buttonStyle(.borderless)
+                    .font(.caption)
             } else if let s = model.summary {
                 Text("\(Format.size(s.bytes)) in \(Format.count(s.files)) files, scanned in \(String(format: "%.1f", s.seconds)) s")
                 if s.cancelled {
@@ -202,8 +216,10 @@ struct StatusBar: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glassPanel(cornerRadius: 12)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
     }
 }

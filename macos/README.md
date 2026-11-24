@@ -231,6 +231,10 @@ it through [`crates/sapu-ffi`](../crates/sapu-ffi), Swift bindings made with
 [UniFFI](https://mozilla.github.io/uniffi-rs/). It needs macOS 13 or later. Releases include it
 as `SapuShell-<version>-macos-universal.zip`; install and open it like Sapu.app.
 
+On macOS 26 and later it uses **Liquid Glass**: the sidebar, toolbar and sheets, plus a
+floating glass status bar, action bar, banners and buttons. Lists stay plain so they're easy
+to read. On older macOS versions the same places use a translucent material instead.
+
 What it does:
 
 - **Browse:** scan a folder (with progress and Stop) and explore it largest first, with

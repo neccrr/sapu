@@ -164,6 +164,7 @@ struct BrowseView: View {
                 Button { goBack() } label: { Image(systemName: "chevron.left") }
                     .disabled(stack.isEmpty)
                     .help("Back")
+                    .glassButton()
                 Breadcrumbs(root: model.summary?.rootPath ?? model.rootPath, stack: stack) { depth in
                     stack = Array(stack.prefix(depth))
                     reload()
@@ -321,7 +322,9 @@ struct RecommendationsView: View {
                         }
                     }
                 }
-                Divider()
+            }
+            // The action bar floats over the list in glass.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 let picked = model.tickedSuggestions
                 HStack {
                     Text("AI guesses and Review items are never ticked for you. Each item is re-checked just before cleaning.")
@@ -333,8 +336,13 @@ struct RecommendationsView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                     .disabled(picked.isEmpty || !model.canClean)
+                    .glassButton(prominent: true)
                 }
-                .padding(12)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .glassPanel()
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
             }
             .sheet(isPresented: $confirming) {
                 BatchConfirmSheet { confirming = false }
