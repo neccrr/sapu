@@ -67,7 +67,7 @@ jobs:
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Bundle Sapu.app
-        run: SKIP_BUILD=1 ./scripts/bundle-macos.sh
+        run: SKIP_BUILD=1 bash scripts/bundle-macos.sh
 
       - name: Sign the sapu command
         if: env.SIGN_IDENTITY != ''
