@@ -5,6 +5,10 @@
   Access, data locations, iCloud, building Sapu.app (including universal builds), test
   options and how releases are made.
 - `Sapu.command` and `scripts/bundle-macos.sh` are now executable after a fresh clone.
+- Optional Developer ID signing and notarization. The release workflow signs, notarizes
+  and staples Sapu.app (and signs and notarizes `sapu`) once the signing secrets are set,
+  so a signed release opens with a normal double-click. `SIGN_IDENTITY=…
+  ./scripts/bundle-macos.sh` signs a local build. Without secrets nothing changes.
 
 ## 0.10.0
 - **Instant start:** the last scan is cached (`~/Library/Caches/sapu/scans/`) and shown

@@ -15,8 +15,10 @@ Sapu needs **macOS 11 (Big Sur) or later** and runs natively on Apple Silicon an
 
 ### First launch: "Sapu can't be opened"
 
-Sapu isn't signed with an Apple Developer ID or notarized yet, so Gatekeeper blocks a plain
-double-click the first time. Any of these gets you past it, and macOS remembers your choice:
+A release that's signed with an Apple Developer ID and notarized opens with a normal
+double-click. Until releases are signed (see [Signing and notarization](#signing-and-notarization)),
+Gatekeeper blocks a plain double-click the first time. Any of these gets you past it, and
+macOS remembers your choice:
 
 - In Finder, **right-click Sapu.app → Open**, then **Open** again in the dialog.
 - Or, after a blocked double-click, go to **System Settings → Privacy & Security** and click
@@ -118,7 +120,8 @@ That builds a release binary and puts **`dist/Sapu.app`** together:
 - `Contents/Info.plist`: bundle ID `io.github.neccrr.sapu`, version from `Cargo.toml`,
   minimum macOS 11, Retina on,
 - an ad-hoc code signature (`codesign --sign -`), so it runs locally and keeps its
-  Full Disk Access.
+  Full Disk Access. Set `SIGN_IDENTITY` to sign with a Developer ID instead (see
+  [Signing and notarization](#signing-and-notarization)).
 
 Drag it into Applications and grant Full Disk Access as above. A self-built app has no
 quarantine flag, so it opens without the right-click step.
@@ -180,10 +183,43 @@ on a macOS runner. It:
    intact) and `sapu-cli-vX.Y.Z-macos-universal.tar.gz` to a GitHub release with generated
    notes.
 
+When the signing secrets below are set, the workflow also signs Sapu.app and `sapu` with
+your Developer ID and the hardened runtime, notarizes both with Apple, and staples the ticket
+to Sapu.app. Without them it ad-hoc signs, as before.
+
 Before tagging, bump `version` in the root `Cargo.toml` and add a `CHANGELOG.md` entry.
+
+### Signing and notarization
+
+You need a paid [Apple Developer](https://developer.apple.com/programs/) membership. Then:
+
+1. In Xcode (**Settings → Accounts → Manage Certificates → + → Developer ID Application**),
+   or on the Apple Developer site, create a **Developer ID Application** certificate.
+2. In **Keychain Access**, export it with its private key as a `.p12` file, with a password.
+3. At [account.apple.com](https://account.apple.com), under **Sign-In and Security → App-Specific
+   Passwords**, make a password for notarization.
+4. In the repository on GitHub, go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERT_P12` | the `.p12`, base64: `base64 -i cert.p12 \| pbcopy` |
+| `MACOS_CERT_PASSWORD` | the `.p12` password |
+| `APPLE_ID` | your Apple ID email |
+| `APPLE_TEAM_ID` | your 10-character team ID (Apple Developer → Membership) |
+| `APPLE_APP_PASSWORD` | the app-specific password |
+
+The next tag builds a signed, notarized release. With only the two certificate secrets set,
+it signs without notarizing.
+
+To sign a local build with a Developer ID in your keychain:
+
+```sh
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/bundle-macos.sh
+```
+
+`security find-identity -v -p codesigning` lists the identities you have.
 
 ## Not done yet
 
-- **Developer ID signing and notarization**, which would remove the right-click → Open step.
 - **A native SwiftUI shell** around `sapu-core` (through UniFFI) may live in this folder one
   day. Today the window app is [`crates/sapu-gui`](../crates/sapu-gui) (egui).

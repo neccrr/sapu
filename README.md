@@ -51,7 +51,7 @@ Grab `Sapu-<version>-macos-universal.zip` from
 [Releases](https://github.com/neccrr/sapu/releases), unzip, and drag **Sapu.app** into
 Applications.
 
-The app isn't notarized yet, so the first time, **right-click → Open → Open**
+If a release isn't notarized yet, the first time, **right-click → Open → Open**
 (or run `xattr -dr com.apple.quarantine /Applications/Sapu.app`).
 
 ### Build from source
