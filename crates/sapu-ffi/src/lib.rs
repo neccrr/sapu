@@ -415,16 +415,16 @@ impl DiskScanner {
             warn!(path = %path, error = %e, "scan failed");
             failed(e)
         })?;
-        let s = &tree.stats;
-        info!(
-            files = s.files,
-            bytes = tree.root.size,
-            errors = s.errors,
-            cancelled = s.cancelled,
-            ms = s.elapsed.as_millis() as u64,
-            "scan done"
-        );
-        Ok(Arc::new(ScanResult::new(tree, use_ai)))
+        let (files, bytes, errors, cancelled) =
+            (tree.stats.files, tree.root.size, tree.stats.errors, tree.stats.cancelled);
+        let walk_ms = tree.stats.elapsed.as_millis() as u64;
+        let started = std::time::Instant::now();
+        // Judging, recommendations and Sapu AI training happen here. "scan done" is
+        // logged after them, as Sapu.app does, so scripts/perf-macos.sh compares like with like.
+        let result = ScanResult::new(tree, use_ai);
+        let judge_ms = started.elapsed().as_millis() as u64;
+        info!(files, bytes, errors, cancelled, ms = walk_ms, judge_ms, "scan done");
+        Ok(Arc::new(result))
     }
 
     pub fn progress(&self) -> ScanProgress {
