@@ -38,12 +38,44 @@ final class AppModel: ObservableObject {
         SapuFFI.startLogging()
         SapuFFI.logEvent(message: "window opened, Full Disk Access: \(fullDiskAccess ? "yes" : "no")")
         refreshSafety()
+        // Start a scan given on the command line right away, without waiting
+        // for a window to appear (it may not, for example on a CI runner).
+        DispatchQueue.main.async { [weak self] in self?.scanFromLaunchArguments() }
     }
 
     /// Cleaning is only allowed on a finished, fresh scan, and one thing at a time.
     var canClean: Bool { result != nil && !scanning && !working }
 
     // MARK: Scanning
+
+    private var launchScanDone = false
+
+    /// `SapuShell <folder>` scans that folder as soon as the window opens,
+    /// like Sapu.app does (scripts/perf-macos.sh relies on this).
+    func scanFromLaunchArguments() {
+        guard !launchScanDone else { return }
+        launchScanDone = true
+        // Skip AppKit's own `-Key value` arguments, such as -NSDocumentRevisionsDebugMode YES.
+        var args = Array(CommandLine.arguments.dropFirst())
+        var folders: [String] = []
+        while let arg = args.first {
+            args.removeFirst()
+            if arg.hasPrefix("-") {
+                if let next = args.first, !next.hasPrefix("-"), !next.hasPrefix("/") { args.removeFirst() }
+            } else {
+                folders.append(arg)
+            }
+        }
+        guard let folder = folders.first else { return }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder, isDirectory: &isDir), isDir.boolValue else {
+            SapuFFI.logEvent(message: "command line folder not found: \(folder)")
+            return
+        }
+        SapuFFI.logEvent(message: "scan requested from the command line: \(folder)")
+        rootPath = folder
+        scan()
+    }
 
     func scan() {
         guard !scanning, !working else { return }
