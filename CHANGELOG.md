@@ -9,10 +9,15 @@
   and staples Sapu.app (and signs and notarizes `sapu`) once the signing secrets are set,
   so a signed release opens with a normal double-click. `SIGN_IDENTITY=…
   ./scripts/bundle-macos.sh` signs a local build. Without secrets nothing changes.
-- **SwiftUI shell (preview)** in `macos/SapuShell`: a native window over `sapu-core` through the
-  new `sapu-ffi` crate (UniFFI). Scan, browse, Recommendations, largest files and data
-  locations. It's read-only, so cleaning stays in Sapu.app. Build it with
-  `./macos/build-shell.sh`; CI builds it on every pull request.
+- **SwiftUI shell (preview)**, `SapuShell.app`: a native window over `sapu-core` through the
+  new `sapu-ffi` crate (UniFFI). It covers Browse, Recommendations, Largest files, Safety
+  (protected list, History, Undo, data) and Logs. It cleans with exactly the same rules as
+  Sapu.app:
+  - Move to Trash for recommendations and single items;
+  - Remove Download, Download Now, and Delete from iCloud with per-item consent;
+  - Protect and Mark as Keep.
+  Releases include it (universal, and signed and notarized when the secrets are set). Build
+  it yourself with `./macos/build-shell.sh`. CI builds it on every pull request.
 - The release workflow no longer fails with "Permission denied" on the bundle step.
 
 ## 0.10.0

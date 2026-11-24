@@ -21,3 +21,6 @@ path = "src/bin/uniffi-bindgen.rs"
 sapu-core.workspace = true
 uniffi = { version = "0.32", features = ["cli"] }
 thiserror.workspace = true
+dirs.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

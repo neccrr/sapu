@@ -21,6 +21,10 @@ extension VerdictKind {
     }
 }
 
+extension FileEntry: Identifiable {
+    public var id: String { path }
+}
+
 struct VerdictBadge: View {
     let opinion: Opinion
 
@@ -50,13 +54,95 @@ struct SizeBar: View {
     }
 }
 
-/// Right-click actions. All of them only look; none change anything on disk.
+/// What the window is asking you to confirm.
+enum Pending: Identifiable {
+    case trash(FileEntry)
+    case icloudDelete(FileEntry)
+
+    var id: String {
+        switch self {
+        case let .trash(e): return "trash:" + e.path
+        case let .icloudDelete(e): return "icloud:" + e.path
+        }
+    }
+}
+
+/// Right-click actions for one item.
 struct EntryMenu: View {
-    let path: String
+    @EnvironmentObject var model: AppModel
+    let entry: FileEntry
+    @Binding var pending: Pending?
 
     var body: some View {
-        Button("Reveal in Finder") { Finder.reveal(path) }
-        Button("Copy Path") { Finder.copy(path) }
+        Button("Reveal in Finder") { Finder.reveal(entry.path) }
+        Button("Copy Path") { Finder.copy(entry.path) }
+        Divider()
+        if entry.inIcloud {
+            Button("Remove Download") { model.removeDownload(entry) }
+                .disabled(!model.canClean)
+            Button("Download Now") { model.download(entry) }
+            Button("Delete from iCloud…") { pending = .icloudDelete(entry) }
+                .disabled(!model.canClean)
+        } else {
+            Button("Move to Trash…") { pending = .trash(entry) }
+                .disabled(!model.canClean)
+        }
+        Divider()
+        Button("Protect") { model.protect(entry.path) }
+        if !entry.idxPath.isEmpty {
+            Button("Mark as Keep") { model.markKeep(entry) }
+        }
+    }
+}
+
+/// Confirmation for a single item. iCloud deletes need their own "I understand".
+struct ConfirmSheet: View {
+    @EnvironmentObject var model: AppModel
+    let pending: Pending
+    let close: () -> Void
+    @State private var understood = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch pending {
+            case let .trash(entry):
+                Text("Move \(entry.name) to the Trash?").font(.headline)
+                Text("\(Format.size(entry.size)). It's re-checked first, and you can put it back with Undo in Safety until you empty the Trash.")
+                    .foregroundStyle(.secondary)
+                Text(entry.path).font(.caption.monospaced()).foregroundStyle(.tertiary)
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
+                    Button("Move to Trash") {
+                        model.moveToTrash(entry)
+                        close()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            case let .icloudDelete(entry):
+                Text("Delete \(entry.name) from iCloud?").font(.headline)
+                Text("This removes it from iCloud and from all your devices, not just this Mac. On this Mac it goes to the Trash, so Undo works here until you empty it. If you only want space back on this Mac, use Remove Download instead.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(entry.path).font(.caption.monospaced()).foregroundStyle(.tertiary)
+                Toggle("I understand this deletes it from all my devices.", isOn: $understood)
+                HStack {
+                    Button("Remove Download Instead") {
+                        model.removeDownload(entry)
+                        close()
+                    }
+                    Spacer()
+                    Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
+                    Button("Delete from iCloud", role: .destructive) {
+                        model.deleteFromICloud(entry, understood: understood)
+                        close()
+                    }
+                    .disabled(!understood)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
     }
 }
 
@@ -65,18 +151,18 @@ struct EntryMenu: View {
 struct BrowseView: View {
     @EnvironmentObject var model: AppModel
     /// Folders opened from the root, outermost first.
-    @State private var stack: [Entry] = []
-    @State private var rows: [Entry] = []
+    @State private var stack: [FileEntry] = []
+    @State private var rows: [FileEntry] = []
     @State private var selection: String?
+    @State private var pending: Pending?
 
-    private var current: Entry? { stack.last }
+    private var current: FileEntry? { stack.last }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
                 Button { goBack() } label: { Image(systemName: "chevron.left") }
                     .disabled(stack.isEmpty)
-                    .keyboardShortcut(.delete, modifiers: [])
                     .help("Back")
                 Breadcrumbs(root: model.summary?.rootPath ?? model.rootPath, stack: stack) { depth in
                     stack = Array(stack.prefix(depth))
@@ -95,6 +181,11 @@ struct BrowseView: View {
                         Image(systemName: entry.isDir ? "folder" : "doc")
                             .foregroundStyle(.secondary)
                         Text(entry.name).lineLimit(1)
+                        if entry.inIcloud {
+                            Image(systemName: entry.size * 2 < entry.logical ? "icloud" : "icloud.and.arrow.down")
+                                .foregroundStyle(.secondary)
+                                .help(entry.size * 2 < entry.logical ? "Only in iCloud" : "Downloaded from iCloud")
+                        }
                         if entry.incomplete {
                             Image(systemName: "exclamationmark.circle")
                                 .foregroundStyle(.orange)
@@ -121,7 +212,9 @@ struct BrowseView: View {
                 .width(min: 90, ideal: 110)
             }
             .contextMenu(forSelectionType: String.self) { ids in
-                if let id = ids.first { EntryMenu(path: id) }
+                if let id = ids.first, let entry = rows.first(where: { $0.path == id }) {
+                    EntryMenu(entry: entry, pending: $pending)
+                }
             } primaryAction: { ids in
                 guard let id = ids.first, let entry = rows.first(where: { $0.path == id }) else { return }
                 if entry.hasChildren {
@@ -144,8 +237,12 @@ struct BrowseView: View {
                 .padding(10)
             }
         }
+        .sheet(item: $pending) { p in
+            ConfirmSheet(pending: p) { pending = nil }
+        }
         .onAppear(perform: reload)
-        .onChange(of: model.summary?.rootPath) { _ in
+        .onChange(of: model.generation) { _ in
+            // A new scan: keep the place if the folders still exist, else go back to the top.
             stack = []
             reload()
         }
@@ -163,13 +260,9 @@ struct BrowseView: View {
     }
 }
 
-extension Entry: Identifiable {
-    public var id: String { path }
-}
-
 struct Breadcrumbs: View {
     let root: String
-    let stack: [Entry]
+    let stack: [FileEntry]
     let jump: (Int) -> Void
 
     var body: some View {
@@ -192,6 +285,7 @@ struct Breadcrumbs: View {
 
 struct RecommendationsView: View {
     @EnvironmentObject var model: AppModel
+    @State private var confirming = false
 
     private let groups: [VerdictKind] = [.safe, .likely, .review]
 
@@ -203,35 +297,104 @@ struct RecommendationsView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            List {
-                ForEach(groups, id: \.self) { verdict in
-                    let items = model.suggestions.filter { $0.opinion.verdict == verdict }
-                    if !items.isEmpty {
-                        SwiftUI.Section {
-                            ForEach(items, id: \.path) { item in
-                                SuggestionRow(item: item)
-                                    .contextMenu { EntryMenu(path: item.path) }
+            VStack(spacing: 0) {
+                List {
+                    ForEach(groups, id: \.self) { verdict in
+                        let items = model.suggestions.filter { $0.opinion.verdict == verdict }
+                        if !items.isEmpty {
+                            SwiftUI.Section {
+                                ForEach(items, id: \.path) { item in
+                                    SuggestionRow(item: item, ticked: binding(for: item))
+                                        .contextMenu {
+                                            Button("Reveal in Finder") { Finder.reveal(item.path) }
+                                            Button("Copy Path") { Finder.copy(item.path) }
+                                        }
+                                }
+                            } header: {
+                                HStack {
+                                    Text(SapuFFI.verdictLabel(verdict: verdict))
+                                    Spacer()
+                                    Text(Format.size(items.reduce(0) { $0 + $1.size })).monospacedDigit()
+                                }
+                                .font(.headline)
                             }
-                        } header: {
-                            HStack {
-                                Text(verdictLabel(verdict: verdict))
-                                Spacer()
-                                Text(Format.size(items.reduce(0) { $0 + $1.size })).monospacedDigit()
-                            }
-                            .font(.headline)
                         }
                     }
                 }
+                Divider()
+                let picked = model.tickedSuggestions
+                HStack {
+                    Text("AI guesses and Review items are never ticked for you. Each item is re-checked just before cleaning.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Move \(picked.count) to Trash (\(Format.size(picked.reduce(0) { $0 + $1.size })))") {
+                        confirming = true
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(picked.isEmpty || !model.canClean)
+                }
+                .padding(12)
+            }
+            .sheet(isPresented: $confirming) {
+                BatchConfirmSheet { confirming = false }
             }
         }
+    }
+
+    private func binding(for item: Suggestion) -> Binding<Bool> {
+        Binding(
+            get: { model.ticked.contains(item.path) },
+            set: { on in
+                if on { model.ticked.insert(item.path) } else { model.ticked.remove(item.path) }
+            }
+        )
+    }
+}
+
+struct BatchConfirmSheet: View {
+    @EnvironmentObject var model: AppModel
+    let close: () -> Void
+    @State private var checked = false
+
+    var body: some View {
+        let picked = model.tickedSuggestions
+        let why = model.confirmationNeeded()
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Move \(picked.count) items to the Trash?").font(.headline)
+            Text("This frees about \(Format.size(picked.reduce(0) { $0 + $1.size })). Anything that changed since the scan is skipped, and you can put it all back with Undo in Safety until you empty the Trash.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let why {
+                Toggle(why, isOn: $checked)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
+                Button("Move to Trash") {
+                    model.cleanTicked(checked: checked)
+                    close()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(why != nil && !checked)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
     }
 }
 
 struct SuggestionRow: View {
     let item: Suggestion
+    @Binding var ticked: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            if item.automatic {
+                Toggle("", isOn: $ticked).labelsHidden()
+            } else {
+                Image(systemName: "hand.raised").foregroundStyle(.secondary).help("Sapu can't do this one for you.")
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text((item.path as NSString).lastPathComponent).font(.body.weight(.medium))
                 Text(item.opinion.reason).font(.callout).foregroundStyle(.secondary)
@@ -244,6 +407,11 @@ struct SuggestionRow: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text(Format.size(item.size)).monospacedDigit()
+                if item.opinion.action == .removeDownload {
+                    Text("Remove download").font(.caption).foregroundStyle(.secondary)
+                } else if item.opinion.action == .trashContents {
+                    Text("Empties the folder").font(.caption).foregroundStyle(.secondary)
+                }
                 if item.opinion.fromAi {
                     Text("Sapu AI, \(Int(item.opinion.confidence * 100))% sure")
                         .font(.caption)
@@ -259,7 +427,7 @@ struct SuggestionRow: View {
 
 struct LargestFilesView: View {
     @EnvironmentObject var model: AppModel
-    @State private var rows: [Entry] = []
+    @State private var rows: [FileEntry] = []
 
     var body: some View {
         Table(rows) {
@@ -274,22 +442,65 @@ struct LargestFilesView: View {
             }
         }
         .contextMenu(forSelectionType: String.self) { ids in
-            if let id = ids.first { EntryMenu(path: id) }
+            if let id = ids.first {
+                Button("Reveal in Finder") { Finder.reveal(id) }
+                Button("Copy Path") { Finder.copy(id) }
+            }
         } primaryAction: { ids in
             if let id = ids.first { Finder.reveal(id) }
         }
         .onAppear { rows = model.largestFiles() }
-        .onChange(of: model.summary?.rootPath) { _ in rows = model.largestFiles() }
+        .onChange(of: model.generation) { _ in rows = model.largestFiles() }
     }
 }
 
-// MARK: - About
+// MARK: - Safety
 
-struct AboutView: View {
+struct SafetyView: View {
+    @EnvironmentObject var model: AppModel
+
     var body: some View {
         Form {
-            SwiftUI.Section("Where Sapu keeps its data") {
-                ForEach(dataLocations(), id: \.path) { loc in
+            SwiftUI.Section("What Sapu never touches") {
+                Text("macOS itself (/System, /usr, /Library…), your home folder itself, ~/Library itself, keychains and .ssh. Everything goes to the Trash, never deleted outright.")
+                    .foregroundStyle(.secondary)
+            }
+            SwiftUI.Section("Your protected list") {
+                if model.protected.isEmpty {
+                    Text("Nothing yet. Right-click an item in Browse, then Protect.").foregroundStyle(.secondary)
+                }
+                ForEach(model.protected, id: \.self) { path in
+                    HStack {
+                        Text(path).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button("Remove") { model.unprotect(path) }
+                    }
+                }
+            }
+            SwiftUI.Section("History") {
+                if model.history.isEmpty {
+                    Text("Nothing has been moved to the Trash yet.").foregroundStyle(.secondary)
+                }
+                ForEach(model.history, id: \.id) { batch in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(batch.label).lineLimit(1).truncationMode(.middle)
+                            Text("\(Format.dateTime(batch.time)), \(batch.items) items, \(Format.size(batch.bytes))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if batch.restorable > 0 {
+                            Button("Undo") { model.undo(batch) }
+                                .disabled(model.working || model.scanning)
+                        } else {
+                            Text("Not in the Trash any more").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            SwiftUI.Section("Data on this Mac") {
+                ForEach(model.locations, id: \.path) { loc in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc.name).font(.body.weight(.medium))
@@ -297,17 +508,55 @@ struct AboutView: View {
                             Text(loc.path).font(.caption.monospaced()).foregroundStyle(.tertiary)
                         }
                         Spacer()
-                        Button("Show in Finder") { Finder.open(loc.path) }
+                        Text(Format.size(loc.bytes)).monospacedDigit().foregroundStyle(.secondary)
+                        Button("Show") { Finder.open(loc.path) }
                     }
                 }
+                Button("Clear Scan Cache") { model.clearCache() }
             }
             SwiftUI.Section("About") {
-                LabeledContent("Version", value: version())
+                LabeledContent("Version", value: SapuFFI.version())
                 LabeledContent("Engine", value: "sapu-core, shared with Sapu and the sapu command")
-                Text("This SwiftUI window is a preview. It scans and explains, but never moves or deletes anything.")
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .onAppear { model.refreshSafety() }
+    }
+}
+
+// MARK: - Logs
+
+struct LogsView: View {
+    @State private var lines: [String] = []
+    @State private var filter = ""
+
+    private var shown: [String] {
+        filter.isEmpty ? lines : lines.filter { $0.localizedCaseInsensitiveContains(filter) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                TextField("Search", text: $filter).textFieldStyle(.roundedBorder).frame(maxWidth: 240)
+                Spacer()
+                Button("Refresh") { reload() }
+                Button("Copy") { Finder.copy(shown.joined(separator: "\n")) }
+                Button("Open in Console") { Finder.openInConsole(SapuFFI.logPath()) }
+            }
+            .padding(10)
+            Divider()
+            ScrollView {
+                Text(shown.joined(separator: "\n"))
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+            }
+        }
+        .onAppear(perform: reload)
+    }
+
+    private func reload() {
+        lines = SapuFFI.recentLog(lines: 500)
     }
 }
