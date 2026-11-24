@@ -219,7 +219,38 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/bundle-ma
 
 `security find-identity -v -p codesigning` lists the identities you have.
 
+## SwiftUI shell (preview)
+
+`macos/SapuShell` is a native SwiftUI window on top of the same engine, `sapu-core`. It talks to
+it through [`crates/sapu-ffi`](../crates/sapu-ffi), Swift bindings made with
+[UniFFI](https://mozilla.github.io/uniffi-rs/). It needs macOS 13 or later.
+
+It's a **preview, and it only looks**. You can scan a folder (with progress and Stop), browse
+it largest first with verdicts and reasons, see Recommendations grouped into Safe, Likely and
+Review, list the largest files, and see where Sapu keeps its data. Right-click gives Reveal in
+Finder and Copy Path. Nothing in the bindings can move, delete or evict a file, so cleaning
+stays in Sapu.app, with its re-check, safety rules, journal, Trash and Undo. **Open Sapu** in
+the window takes you there.
+
+Build it with Xcode installed (the Command Line Tools alone don't include `xcodebuild`):
+
+```sh
+./macos/build-shell.sh             # dist/SapuShell.app
+UNIVERSAL=1 ./macos/build-shell.sh # Apple Silicon + Intel
+```
+
+The script builds `sapu-ffi` as a static library, generates
+`SapuShell/Sources/SapuFFI/sapu_ffi.swift` and an XCFramework (both gitignored), runs
+`swift build`, and bundles `dist/SapuShell.app` (bundle ID `io.github.neccrr.sapu.shell`),
+signed ad-hoc or with `SIGN_IDENTITY`. After the first build you can also open
+`macos/SapuShell/Package.swift` in Xcode. CI builds the shell on every pull request.
+
+It reads Full Disk Access separately from Sapu.app, so add it in System Settings too for a
+complete scan.
+
 ## Not done yet
 
-- **A native SwiftUI shell** around `sapu-core` (through UniFFI) may live in this folder one
-  day. Today the window app is [`crates/sapu-gui`](../crates/sapu-gui) (egui).
+- **Cleaning from the SwiftUI shell.** It would need the same consent flows as Sapu.app
+  (pre-ticking rules, the "I've checked" tick, iCloud consent, Undo) before the bindings expose
+  anything that changes files.
+- **Shipping the shell in releases.** For now it's built from source only.

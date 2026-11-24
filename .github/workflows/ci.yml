@@ -26,3 +26,13 @@ jobs:
         run: cargo test --workspace
       - name: Build
         run: cargo build --release --workspace
+
+  swift-shell:
+    name: SwiftUI shell (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build SapuShell.app
+        run: bash macos/build-shell.sh

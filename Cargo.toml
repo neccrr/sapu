@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/sapu-core", "crates/sapu-cli", "crates/sapu-gui"]
+members = ["crates/sapu-core", "crates/sapu-cli", "crates/sapu-gui", "crates/sapu-ffi"]
 # `cargo run` with no -p opens the window app
 default-members = ["crates/sapu-gui"]
 

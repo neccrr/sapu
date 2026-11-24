@@ -209,7 +209,8 @@ crates/
 │   ├── cache.rs       scan cache (instant start)
 │   └── paths.rs       where Sapu keeps its data
 ├── sapu-gui/      window app (egui/eframe): list, treemap, tabs, logs window
-└── sapu-cli/      `sapu` command + terminal explorer (ratatui)
+├── sapu-cli/      `sapu` command + terminal explorer (ratatui)
+└── sapu-ffi/      Swift bindings (UniFFI) for the SwiftUI shell in macos/SapuShell (preview)
 ```
 
 ## Contributing
