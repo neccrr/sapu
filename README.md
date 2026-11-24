@@ -65,13 +65,14 @@ cargo run --release                # build and open the window app
 ./scripts/bundle-macos.sh          # or build dist/Sapu.app
 ```
 
-You can also double-click **`Sapu.command`** in Finder.
+You can also double-click **`Sapu.command`** in Finder. The [macOS guide](macos/README.md)
+covers bundling, first launch, permissions and releases in more detail.
 
 ### Full Disk Access
 
 For a complete scan (and for Undo to find items in the Trash), add **Sapu** (or Terminal,
 if you run it from there) under **System Settings → Privacy & Security → Full Disk Access**.
-The log says at startup whether Sapu has it.
+The log says at startup whether Sapu has it. More in the [macOS guide](macos/README.md#full-disk-access).
 
 ## Using it
 

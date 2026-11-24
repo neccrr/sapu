@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- A macOS guide, [`macos/README.md`](macos/README.md): install and first launch, Full Disk
+  Access, data locations, iCloud, building Sapu.app (including universal builds), test
+  options and how releases are made.
+- `Sapu.command` and `scripts/bundle-macos.sh` are now executable after a fresh clone.
+
 ## 0.10.0
 - **Instant start:** the last scan is cached (`~/Library/Caches/sapu/scans/`) and shown
   immediately while a fresh scan runs in the background. Nothing can be cleaned until the
