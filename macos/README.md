@@ -173,6 +173,11 @@ SAPU_GLASS=1 /Applications/Sapu.app/Contents/MacOS/Sapu
 
 ## Releases
 
+**Test builds:** every CI run (each push to `main` and each pull request) attaches
+`Sapu.app` and `SapuShell.app` for Apple Silicon as artifacts, kept for 14 days. Open the run
+under [Actions](https://github.com/neccrr/sapu/actions), scroll to **Artifacts**, download, and
+unzip twice. These builds are ad-hoc signed, so open them with right-click → Open.
+
 Pushing a tag like `v0.10.0` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 on a macOS runner. It:
 

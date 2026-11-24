@@ -26,6 +26,15 @@ jobs:
         run: cargo test --workspace
       - name: Build
         run: cargo build --release --workspace
+      - name: Bundle Sapu.app
+        run: |
+          SKIP_BUILD=1 bash scripts/bundle-macos.sh
+          ditto -c -k --keepParent dist/Sapu.app dist/Sapu-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sapu.app
+          path: dist/Sapu-macos.zip
+          retention-days: 14
 
   swift-shell:
     name: SwiftUI shell (macOS)
@@ -35,4 +44,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build SapuShell.app
-        run: bash macos/build-shell.sh
+        run: |
+          bash macos/build-shell.sh
+          ditto -c -k --keepParent dist/SapuShell.app dist/SapuShell-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SapuShell.app
+          path: dist/SapuShell-macos.zip
+          retention-days: 14
