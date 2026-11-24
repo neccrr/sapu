@@ -2,6 +2,15 @@ name: Release
 
 # Push a tag like v0.9.0 to build a universal (Apple Silicon + Intel) Sapu.app
 # and the `sapu` command-line tool, and attach them to a GitHub release.
+#
+# Signing and notarization are optional. They run only when these repository
+# secrets are set (see macos/README.md → "Signing and notarization"):
+#   MACOS_CERT_P12        base64 of a "Developer ID Application" .p12
+#   MACOS_CERT_PASSWORD   password of that .p12
+#   APPLE_ID              Apple ID email used for notarization
+#   APPLE_TEAM_ID         10-character team ID
+#   APPLE_APP_PASSWORD    app-specific password for that Apple ID
+# Without them the app is ad-hoc signed, as before.
 on:
   push:
     tags: ["v*"]
@@ -12,6 +21,12 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -34,9 +49,43 @@ jobs:
               "target/x86_64-apple-darwin/release/$bin"
           done
 
-      - name: Bundle Sapu.app and archives
+      - name: Import signing certificate
+        if: env.MACOS_CERT_P12 != ''
         run: |
-          SKIP_BUILD=1 ./scripts/bundle-macos.sh
+          KEYCHAIN="$RUNNER_TEMP/sapu.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -m1 "Developer ID Application" | sed -E 's/.*"(.*)"/\1/')
+          test -n "$IDENTITY" || { echo "No Developer ID Application identity in MACOS_CERT_P12"; exit 1; }
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Bundle Sapu.app
+        run: SKIP_BUILD=1 bash scripts/bundle-macos.sh
+
+      - name: Sign the sapu command
+        if: env.SIGN_IDENTITY != ''
+        run: codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" target/release/sapu
+
+      - name: Notarize
+        if: env.SIGN_IDENTITY != '' && env.APPLE_ID != ''
+        run: |
+          ditto -c -k --keepParent dist/Sapu.app "$RUNNER_TEMP/Sapu-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Sapu-notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/Sapu.app
+          ditto -c -k "target/release/sapu" "$RUNNER_TEMP/sapu-cli-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/sapu-cli-notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+
+      - name: Archives
+        run: |
           cd dist
           ditto -c -k --keepParent Sapu.app "Sapu-${GITHUB_REF_NAME}-macos-universal.zip"
           tar czf "sapu-cli-${GITHUB_REF_NAME}-macos-universal.tar.gz" -C ../target/release sapu

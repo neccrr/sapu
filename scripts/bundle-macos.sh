@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Build Sapu.app — a double-clickable macOS app.
 # Usage: ./scripts/bundle-macos.sh        → dist/Sapu.app
+#
+#   SKIP_BUILD=1     bundle an existing target/release/sapu-gui
+#   SIGN_IDENTITY=…  sign with a Developer ID ("Developer ID Application: Name (TEAMID)")
+#                    and the hardened runtime, ready for notarization.
+#                    Without it the app gets an ad-hoc signature.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,8 +41,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc signature: lets macOS run it locally and remember Full Disk Access.
-codesign --force --deep --sign - "$APP"
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  echo "▸ signing with $SIGN_IDENTITY"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+  codesign --verify --strict --verbose=2 "$APP"
+else
+  # Ad-hoc signature: lets macOS run it locally and remember Full Disk Access.
+  codesign --force --deep --sign - "$APP"
+fi
 
 echo "✓ $APP"
 echo "  Drag it into /Applications, then add it under"

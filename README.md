@@ -51,7 +51,7 @@ Grab `Sapu-<version>-macos-universal.zip` from
 [Releases](https://github.com/neccrr/sapu/releases), unzip, and drag **Sapu.app** into
 Applications.
 
-The app isn't notarized yet, so the first time, **right-click → Open → Open**
+If a release isn't notarized yet, the first time, **right-click → Open → Open**
 (or run `xattr -dr com.apple.quarantine /Applications/Sapu.app`).
 
 ### Build from source
@@ -65,13 +65,14 @@ cargo run --release                # build and open the window app
 ./scripts/bundle-macos.sh          # or build dist/Sapu.app
 ```
 
-You can also double-click **`Sapu.command`** in Finder.
+You can also double-click **`Sapu.command`** in Finder. The [macOS guide](macos/README.md)
+covers bundling, first launch, permissions and releases in more detail.
 
 ### Full Disk Access
 
 For a complete scan (and for Undo to find items in the Trash), add **Sapu** (or Terminal,
 if you run it from there) under **System Settings → Privacy & Security → Full Disk Access**.
-The log says at startup whether Sapu has it.
+The log says at startup whether Sapu has it. More in the [macOS guide](macos/README.md#full-disk-access).
 
 ## Using it
 
@@ -208,7 +209,8 @@ crates/
 │   ├── cache.rs       scan cache (instant start)
 │   └── paths.rs       where Sapu keeps its data
 ├── sapu-gui/      window app (egui/eframe): list, treemap, tabs, logs window
-└── sapu-cli/      `sapu` command + terminal explorer (ratatui)
+├── sapu-cli/      `sapu` command + terminal explorer (ratatui)
+└── sapu-ffi/      Swift bindings (UniFFI) for the SwiftUI shell in macos/SapuShell (preview)
 ```
 
 ## Contributing

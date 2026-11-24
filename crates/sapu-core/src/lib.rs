@@ -1,5 +1,5 @@
 //! sapu-core: the engine. UI-agnostic so the CLI, the TUI,
-//! and a future SwiftUI app can all share it.
+//! and the SwiftUI shell (through sapu-ffi) can all share it.
 
 pub mod advisor;
 pub mod cache;

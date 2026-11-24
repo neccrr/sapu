@@ -1,0 +1,23 @@
+[package]
+name = "sapu-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Swift bindings (UniFFI) for sapu-core, used by the SwiftUI shell in macos/"
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+sapu-core.workspace = true
+uniffi = { version = "0.32", features = ["cli"] }
+thiserror.workspace = true
