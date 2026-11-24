@@ -19,6 +19,7 @@
   Releases include it (universal, and signed and notarized when the secrets are set). Build
   it yourself with `./macos/build-shell.sh`. CI builds it on every pull request.
 - The release workflow no longer fails with "Permission denied" on the bundle step.
+- CI uploads Sapu.app and SapuShell.app (Apple Silicon) as downloadable artifacts on every run.
 
 ## 0.10.0
 - **Instant start:** the last scan is cached (`~/Library/Caches/sapu/scans/`) and shown
