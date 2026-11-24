@@ -416,7 +416,14 @@ impl DiskScanner {
             failed(e)
         })?;
         let s = &tree.stats;
-        info!(files = s.files, bytes = tree.root.size, errors = s.errors, cancelled = s.cancelled, "scan finished");
+        info!(
+            files = s.files,
+            bytes = tree.root.size,
+            errors = s.errors,
+            cancelled = s.cancelled,
+            ms = s.elapsed.as_millis() as u64,
+            "scan done"
+        );
         Ok(Arc::new(ScanResult::new(tree, use_ai)))
     }
 

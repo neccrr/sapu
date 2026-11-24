@@ -1,0 +1,37 @@
+name: Performance
+
+# Measures Sapu.app and SapuShell.app on a macOS runner and uploads
+# perf-report.md (also shown on the run's summary page). Run it by hand from
+# the Actions tab, or it runs on pull requests that touch the apps or engine.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "macos/**"
+      - "scripts/perf-macos.sh"
+      - ".github/workflows/perf.yml"
+
+jobs:
+  perf:
+    name: Performance report (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build both apps
+        run: |
+          bash scripts/bundle-macos.sh
+          bash macos/build-shell.sh
+      - name: Measure
+        run: bash scripts/perf-macos.sh perf-report.md
+      - name: Summary
+        if: always()
+        run: test -f perf-report.md && cat perf-report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-report
+          path: perf-report.md
+          if-no-files-found: ignore

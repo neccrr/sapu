@@ -45,6 +45,22 @@ final class AppModel: ObservableObject {
 
     // MARK: Scanning
 
+    private var launchScanDone = false
+
+    /// `SapuShell <folder>` scans that folder as soon as the window opens,
+    /// like Sapu.app does (scripts/perf-macos.sh relies on this).
+    func scanFromLaunchArguments() {
+        guard !launchScanDone else { return }
+        launchScanDone = true
+        let args = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let folder = args.first else { return }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder, isDirectory: &isDir), isDir.boolValue else { return }
+        SapuFFI.logEvent(message: "scan requested from the command line: \(folder)")
+        rootPath = folder
+        scan()
+    }
+
     func scan() {
         guard !scanning, !working else { return }
         scanning = true

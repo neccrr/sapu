@@ -19,8 +19,16 @@
   Releases include it (universal, and signed and notarized when the secrets are set). Build
   it yourself with `./macos/build-shell.sh`. CI builds it on every pull request.
 - The release workflow no longer fails with "Permission denied" on the bundle step.
-- SapuShell uses Liquid Glass on macOS 26 (floating status and action bars, banners, buttons), with a
-  material fallback on older macOS.
+- SapuShell uses Liquid Glass on macOS 26, throughout the controls layer:
+  - floating glass path bar, filter chips, action bar and status pills that morph in and out
+    (`GlassEffectContainer`, `glassEffectID`);
+  - tinted, interactive glass for chips and pills; glass buttons; soft scroll edges;
+  - a glass detail card for the selected item, and a glass scanning card with live counters.
+  Lists stay plain for readability. Reduce Transparency gets solid panels, older macOS gets a
+  material, and `SAPU_NO_GLASS=1` turns glass off.
+- SapuShell scans a folder given on the command line, like Sapu.app.
+- `scripts/perf-macos.sh` and a Performance workflow measure both apps (scan speed, launch to
+  scan done, memory, idle CPU, glass on or off, sizes); see `docs/performance.md`.
 - CI uploads Sapu.app and SapuShell.app (Apple Silicon) as downloadable artifacts on every run.
 
 ## 0.10.0

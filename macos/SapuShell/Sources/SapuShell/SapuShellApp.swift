@@ -72,9 +72,6 @@ struct ContentView: View {
         } detail: {
             let current = pane ?? .browse
             VStack(spacing: 0) {
-                if !model.fullDiskAccess {
-                    FullDiskAccessNotice()
-                }
                 Group {
                     if current.needsScan && model.scanning {
                         ScanningView()
@@ -92,8 +89,13 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            // Content scrolls under the floating glass status bar.
+            // Content scrolls under the floating glass banner and status bar.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !model.fullDiskAccess { FullDiskAccessNotice() }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
+            .softScrollEdges()
+            .task { model.scanFromLaunchArguments() }
             .toolbar {
                 ToolbarItemGroup {
                     Button { model.chooseFolder() } label: { Label("Open Folder", systemImage: "folder.badge.plus") }
@@ -110,18 +112,18 @@ struct ContentView: View {
 
 struct FullDiskAccessNotice: View {
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock")
+        HStack(spacing: 10) {
+            Image(systemName: "lock.fill").foregroundStyle(.orange)
             Text("Some folders can't be read without Full Disk Access, so scans and Undo may miss things.")
                 .lineLimit(2)
             Spacer()
             Button("Open Settings") { Finder.openFullDiskAccessSettings() }
-                .glassButton()
+                .glassButton(tint: .orange)
         }
         .font(.callout)
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .glassPanel()
+        .padding(.vertical, 9)
+        .glassPanel(cornerRadius: 18, GlassStyle(tint: .orange.opacity(0.25)))
         .padding(.horizontal, 10)
         .padding(.top, 8)
     }
@@ -159,67 +161,139 @@ struct StartView: View {
 
 struct ScanningView: View {
     @EnvironmentObject var model: AppModel
+    @Namespace private var glass
 
     var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            if let p = model.progress {
-                Text("\(Format.count(p.files)) files, \(Format.size(p.bytes))")
-                    .font(.headline.monospacedDigit())
-                Text(p.currentPath)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 520)
-            } else {
-                Text("Starting…")
+        GlassGroup(spacing: 14) {
+            VStack(spacing: 14) {
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.large)
+                    Text("Scanning \((model.rootPath as NSString).lastPathComponent)")
+                        .font(.system(.title3, design: .serif))
+                    if let p = model.progress {
+                        Text(p.currentPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 460)
+                    }
+                }
+                .padding(24)
+                .frame(minWidth: 420)
+                .glassPanel(cornerRadius: 26, GlassStyle(tint: .accentColor.opacity(0.12)))
+                .glassID("card", in: glass)
+
+                // Live counters, each its own pill; they morph in as numbers arrive.
+                HStack(spacing: 8) {
+                    if let p = model.progress {
+                        Counter(value: Format.count(p.files), label: "files")
+                            .glassID("files", in: glass)
+                        Counter(value: Format.size(p.bytes), label: "found")
+                            .glassID("bytes", in: glass)
+                        if p.errors > 0 {
+                            Counter(value: Format.count(p.errors), label: "unreadable", tint: .orange)
+                                .glassID("errors", in: glass)
+                        }
+                    }
+                    Button("Stop") { model.cancel() }
+                        .glassButton(tint: .red)
+                        .glassID("stop", in: glass)
+                }
             }
-            Button("Stop") { model.cancel() }
-                .glassButton()
         }
-        .padding(24)
-        .frame(minWidth: 360)
-        .glassPanel(cornerRadius: 22)
+        .animation(.glassMorph, value: model.progress?.errors ?? 0 > 0)
+        .animation(.glassMorph, value: model.progress == nil)
         .padding()
     }
 }
 
-struct StatusBar: View {
-    @EnvironmentObject var model: AppModel
+/// A number with a word under it, in a small glass pill.
+struct Counter: View {
+    let value: String
+    let label: String
+    var tint: Color? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            if model.working {
-                ProgressView().controlSize(.small)
-            }
-            if let notice = model.notice {
-                Text(notice.text)
-                    .foregroundStyle(notice.kind == .error ? Color.red : Color.secondary)
-                    .lineLimit(2)
-                Button("Dismiss") { model.notice = nil }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-            } else if let s = model.summary {
-                Text("\(Format.size(s.bytes)) in \(Format.count(s.files)) files, scanned in \(String(format: "%.1f", s.seconds)) s")
-                if s.cancelled {
-                    Text("Stopped early, so totals are partial.")
+        VStack(spacing: 1) {
+            Text(value).font(.headline.monospacedDigit())
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .glassCapsule(GlassStyle(tint: tint?.opacity(0.3)))
+    }
+}
+
+/// Floating glass status pills. Each piece morphs in and out on its own:
+/// the scan summary, a spinner while a file action runs, and the latest notice.
+struct StatusBar: View {
+    @EnvironmentObject var model: AppModel
+    @Namespace private var glass
+
+    var body: some View {
+        GlassGroup(spacing: 8) {
+            HStack(spacing: 8) {
+                Group {
+                    if let s = model.summary {
+                        HStack(spacing: 6) {
+                            Image(systemName: "internaldrive")
+                            Text("\(Format.size(s.bytes)) in \(Format.count(s.files)) files, \(String(format: "%.1f", s.seconds)) s")
+                            if s.cancelled { Text("(partial)") }
+                            if s.errors > 0 {
+                                Text("\(Format.count(s.errors)) unreadable").foregroundStyle(.orange)
+                            }
+                        }
+                    } else {
+                        Text("Sapu \(SapuFFI.version())")
+                    }
                 }
-                if s.errors > 0 {
-                    Text("\(Format.count(s.errors)) items couldn't be read.")
-                        .foregroundStyle(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassCapsule()
+                .glassID("summary", in: glass)
+
+                if model.working {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Working…")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassCapsule(GlassStyle(tint: .accentColor.opacity(0.2)))
+                    .glassID("working", in: glass)
                 }
-            } else {
-                Text("Sapu \(SapuFFI.version())")
+
+                Spacer(minLength: 0)
+
+                if let notice = model.notice, !model.working {
+                    HStack(spacing: 8) {
+                        Image(systemName: notice.kind == .error ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .foregroundStyle(notice.kind == .error ? Color.red : Color.green)
+                        Text(notice.text).lineLimit(2).foregroundStyle(.primary)
+                        Button { model.notice = nil } label: { Image(systemName: "xmark") }
+                            .buttonStyle(.borderless)
+                            .help("Dismiss")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassCapsule(GlassStyle(tint: (notice.kind == .error ? Color.red : Color.green).opacity(0.18),
+                                             interactive: true))
+                    .glassID("notice", in: glass)
+                }
             }
-            Spacer()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .glassPanel(cornerRadius: 12)
+        .animation(.glassMorph, value: model.working)
+        .animation(.glassMorph, value: model.notice)
         .padding(.horizontal, 10)
         .padding(.bottom, 8)
+        .task(id: model.notice) {
+            // Good news fades away by itself; errors stay until dismissed.
+            guard let notice = model.notice, notice.kind == .ok, !model.working else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if model.notice == notice { model.notice = nil }
+        }
     }
 }
