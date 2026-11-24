@@ -87,10 +87,10 @@ measure() {
   local log="$home/Library/Logs/sapu/$logname"
   local start pid scan_ms="n/a" peak=0 rss cpu_sum=0 cpu_n=0 settled=0
   start=$(ms)
-  env HOME="$home" "$@" "$bin" "$TREE" >/dev/null 2>&1 &
+  env HOME="$home" "$@" "$bin" "$TREE" >"$home/stderr.txt" 2>&1 &
   pid=$!
   # Wait up to 120 s for "scan done" in the app's own log.
-  for _ in $(seq 1 1200); do
+  while [ $(( $(ms) - start )) -lt 120000 ]; do
     if ! kill -0 "$pid" 2>/dev/null; then break; fi
     rss=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || true)
     [ "${rss:-0}" -gt "$peak" ] && peak=$rss
@@ -114,6 +114,13 @@ measure() {
     done
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
+    if [ "$scan_ms" = "n/a" ]; then
+      # Show why in the job log (stderr, so it stays out of the report).
+      echo "  $name: no \"scan done\" within 120 s; last log lines:" >&2
+      tail -n 20 "$log" 2>/dev/null | sed 's/^/    /' >&2 || echo "    (no log at $log)" >&2
+      echo "  $name: its output:" >&2
+      tail -n 20 "$home/stderr.txt" 2>/dev/null | sed 's/^/    /' >&2 || true
+    fi
     printf '%s | %s MB | %s MB | %s %%' "$scan_ms" "$((peak / 1024))" "$((settled / 1024))" \
       "$(python3 -c "print(round($cpu_sum / max($cpu_n, 1), 1))")"
   else
