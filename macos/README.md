@@ -221,36 +221,62 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/bundle-ma
 
 ## SwiftUI shell (preview)
 
-`macos/SapuShell` is a native SwiftUI window on top of the same engine, `sapu-core`. It talks to
+`SapuShell.app` is a native SwiftUI window on top of the same engine, `sapu-core`. It talks to
 it through [`crates/sapu-ffi`](../crates/sapu-ffi), Swift bindings made with
-[UniFFI](https://mozilla.github.io/uniffi-rs/). It needs macOS 13 or later.
+[UniFFI](https://mozilla.github.io/uniffi-rs/). It needs macOS 13 or later. Releases include it
+as `SapuShell-<version>-macos-universal.zip`; install and open it like Sapu.app.
 
-It's a **preview, and it only looks**. You can scan a folder (with progress and Stop), browse
-it largest first with verdicts and reasons, see Recommendations grouped into Safe, Likely and
-Review, list the largest files, and see where Sapu keeps its data. Right-click gives Reveal in
-Finder and Copy Path. Nothing in the bindings can move, delete or evict a file, so cleaning
-stays in Sapu.app, with its re-check, safety rules, journal, Trash and Undo. **Open Sapu** in
-the window takes you there.
+What it does:
 
-Build it with Xcode installed (the Command Line Tools alone don't include `xcodebuild`):
+- **Browse:** scan a folder (with progress and Stop) and explore it largest first, with
+  verdicts, reasons and iCloud status.
+- **Recommendations:** grouped into Safe, Likely and Review, with tick boxes, and *Move to
+  Trash* for the ticked items.
+- **Largest files** anywhere in the scan.
+- **Right-click** an item for Move to Trash…, Remove Download, Download Now, Delete from
+  iCloud…, Protect and Mark as Keep.
+- **Safety:** your protected list, History with **Undo**, and Data on this Mac with sizes.
+- **Logs:** the shell's log with search, copy, and *Open in Console*.
+
+Cleaning follows exactly the same rules as Sapu.app, because it calls the same core code:
+
+- Only rule-based Safe and Likely items are ticked to begin with. AI guesses, Review items
+  and iCloud items never are.
+- A batch with Review items or AI guesses, over 20 GB, or over 100 items needs an extra
+  "I've checked" tick.
+- Each item is re-checked right before it's touched and skipped if it changed since the scan.
+- The hard rules and your protected list always apply.
+- Everything is written to the journal first and goes to the Trash, so Undo works.
+- Deleting from iCloud needs an "I understand" for that one item, and whole iCloud folders
+  are refused.
+- After any change the window rescans, so it never shows things that are already gone.
+- Every action is logged to `~/Library/Logs/sapu/sapu-shell.log`.
+
+History, the protected list and Sapu AI are shared with Sapu.app and the `sapu` command, so
+an Undo works from any of them. The shell checks Full Disk Access on its own (macOS asks per
+app), so add **SapuShell** in System Settings as well. The banner at the top of the window
+has a button that opens the right settings page.
+
+Build it yourself with Xcode installed (the Command Line Tools alone don't include
+`xcodebuild`):
 
 ```sh
 ./macos/build-shell.sh             # dist/SapuShell.app
 UNIVERSAL=1 ./macos/build-shell.sh # Apple Silicon + Intel
 ```
 
-The script builds `sapu-ffi` as a static library, generates
-`SapuShell/Sources/SapuFFI/sapu_ffi.swift` and an XCFramework (both gitignored), runs
-`swift build`, and bundles `dist/SapuShell.app` (bundle ID `io.github.neccrr.sapu.shell`),
-signed ad-hoc or with `SIGN_IDENTITY`. After the first build you can also open
-`macos/SapuShell/Package.swift` in Xcode. CI builds the shell on every pull request.
+The script:
 
-It reads Full Disk Access separately from Sapu.app, so add it in System Settings too for a
-complete scan.
+1. builds `sapu-ffi` as a static library,
+2. generates `SapuShell/Sources/SapuFFI/sapu_ffi.swift` and an XCFramework (both gitignored),
+3. runs `swift build`,
+4. bundles `dist/SapuShell.app` (bundle ID `io.github.neccrr.sapu.shell`), signed ad-hoc or
+   with `SIGN_IDENTITY`.
+
+After the first build you can also open `macos/SapuShell/Package.swift` in Xcode. CI builds the
+shell on every pull request.
 
 ## Not done yet
 
-- **Cleaning from the SwiftUI shell.** It would need the same consent flows as Sapu.app
-  (pre-ticking rules, the "I've checked" tick, iCloud consent, Undo) before the bindings expose
-  anything that changes files.
-- **Shipping the shell in releases.** For now it's built from source only.
+- **Treemap** in the SwiftUI shell. Browse is a list for now; Sapu.app has the treemap.
+- **Instant start from the scan cache** in the SwiftUI shell. It always does a fresh scan.

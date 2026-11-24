@@ -10,7 +10,7 @@ struct SapuShellApp: App {
         WindowGroup("Sapu") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 860, minHeight: 540)
                 .onAppear {
                     // Swift apps started from the command line don't come to the front on their own.
                     NSApplication.shared.setActivationPolicy(.regular)
@@ -25,7 +25,7 @@ struct SapuShellApp: App {
             CommandMenu("Scan") {
                 Button("Rescan") { model.scan() }
                     .keyboardShortcut("r")
-                    .disabled(model.scanning)
+                    .disabled(model.scanning || model.working)
                 Button("Stop Scan") { model.cancel() }
                     .keyboardShortcut(".")
                     .disabled(!model.scanning)
@@ -40,7 +40,8 @@ enum Pane: String, CaseIterable, Identifiable {
     case browse = "Browse"
     case recommendations = "Recommendations"
     case largest = "Largest files"
-    case about = "Data and about"
+    case safety = "Safety"
+    case logs = "Logs"
 
     var id: String { rawValue }
 
@@ -49,9 +50,13 @@ enum Pane: String, CaseIterable, Identifiable {
         case .browse: return "folder"
         case .recommendations: return "sparkles"
         case .largest: return "doc.text.magnifyingglass"
-        case .about: return "info.circle"
+        case .safety: return "checkmark.shield"
+        case .logs: return "list.bullet.rectangle"
         }
     }
+
+    /// Safety and Logs work without a scan.
+    var needsScan: Bool { self != .safety && self != .logs }
 }
 
 struct ContentView: View {
@@ -65,22 +70,23 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
+            let current = pane ?? .browse
             VStack(spacing: 0) {
-                if let error = model.errorMessage {
-                    Banner(text: error, tint: .red) { model.errorMessage = nil }
+                if !model.fullDiskAccess {
+                    FullDiskAccessNotice()
                 }
-                PreviewNotice()
                 Group {
-                    if model.scanning {
+                    if current.needsScan && model.scanning {
                         ScanningView()
-                    } else if model.result == nil {
+                    } else if current.needsScan && model.result == nil {
                         StartView()
                     } else {
-                        switch pane ?? .browse {
+                        switch current {
                         case .browse: BrowseView()
                         case .recommendations: RecommendationsView()
                         case .largest: LargestFilesView()
-                        case .about: AboutView()
+                        case .safety: SafetyView()
+                        case .logs: LogsView()
                         }
                     }
                 }
@@ -91,48 +97,29 @@ struct ContentView: View {
                 ToolbarItemGroup {
                     Button { model.chooseFolder() } label: { Label("Open Folder", systemImage: "folder.badge.plus") }
                         .help("Choose a folder to scan")
+                        .disabled(model.scanning || model.working)
                     Button { model.scan() } label: { Label("Rescan", systemImage: "arrow.clockwise") }
                         .help("Scan again")
-                        .disabled(model.scanning)
+                        .disabled(model.scanning || model.working)
                 }
             }
         }
     }
 }
 
-/// Says plainly that this window can look but not clean.
-struct PreviewNotice: View {
+struct FullDiskAccessNotice: View {
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "eye")
-            Text("Preview: this window only looks. To clean, use Sapu, where everything goes to the Trash and can be undone.")
+            Image(systemName: "lock")
+            Text("Some folders can't be read without Full Disk Access, so scans and Undo may miss things.")
                 .lineLimit(2)
             Spacer()
-            Button("Open Sapu") { Finder.openSapu() }
+            Button("Open Settings") { Finder.openFullDiskAccessSettings() }
         }
         .font(.callout)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(.quaternary.opacity(0.5))
-    }
-}
-
-struct Banner: View {
-    let text: String
-    let tint: Color
-    let dismiss: () -> Void
-
-    var body: some View {
-        HStack {
-            Image(systemName: "exclamationmark.triangle")
-            Text(text)
-            Spacer()
-            Button("Dismiss", action: dismiss)
-        }
-        .font(.callout)
-        .foregroundStyle(tint)
-        .padding(10)
-        .background(tint.opacity(0.08))
     }
 }
 
@@ -151,7 +138,7 @@ struct StartView: View {
                     .keyboardShortcut(.defaultAction)
                 Button("Choose Folder…") { model.chooseFolder() }
             }
-            Text("For a complete scan, add this app under System Settings, Privacy & Security, Full Disk Access.")
+            Text("Everything Sapu cleans goes to the Trash first, and you can undo it in Safety.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -189,18 +176,27 @@ struct StatusBar: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        HStack {
-            if let s = model.summary {
+        HStack(spacing: 10) {
+            if model.working {
+                ProgressView().controlSize(.small)
+            }
+            if let notice = model.notice {
+                Text(notice.text)
+                    .foregroundStyle(notice.kind == .error ? Color.red : Color.secondary)
+                    .lineLimit(2)
+                Button("Dismiss") { model.notice = nil }
+                    .buttonStyle(.borderless)
+            } else if let s = model.summary {
                 Text("\(Format.size(s.bytes)) in \(Format.count(s.files)) files, scanned in \(String(format: "%.1f", s.seconds)) s")
                 if s.cancelled {
                     Text("Stopped early, so totals are partial.")
                 }
                 if s.errors > 0 {
-                    Text("\(Format.count(s.errors)) items couldn't be read. Full Disk Access gives a complete scan.")
+                    Text("\(Format.count(s.errors)) items couldn't be read.")
                         .foregroundStyle(.orange)
                 }
             } else {
-                Text("Sapu \(version())")
+                Text("Sapu \(SapuFFI.version())")
             }
             Spacer()
         }

@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.9.0 to build a universal (Apple Silicon + Intel) Sapu.app
-# and the `sapu` command-line tool, and attach them to a GitHub release.
+# Push a tag like v0.9.0 to build a universal (Apple Silicon + Intel) Sapu.app,
+# the SwiftUI preview SapuShell.app and the `sapu` command-line tool, and attach
+# them to a GitHub release.
 #
 # Signing and notarization are optional. They run only when these repository
 # secrets are set (see macos/README.md → "Signing and notarization"):
@@ -69,6 +70,9 @@ jobs:
       - name: Bundle Sapu.app
         run: SKIP_BUILD=1 bash scripts/bundle-macos.sh
 
+      - name: Build SapuShell.app (SwiftUI preview)
+        run: UNIVERSAL=1 bash macos/build-shell.sh
+
       - name: Sign the sapu command
         if: env.SIGN_IDENTITY != ''
         run: codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" target/release/sapu
@@ -80,6 +84,10 @@ jobs:
           xcrun notarytool submit "$RUNNER_TEMP/Sapu-notarize.zip" \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple dist/Sapu.app
+          ditto -c -k --keepParent dist/SapuShell.app "$RUNNER_TEMP/SapuShell-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/SapuShell-notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/SapuShell.app
           ditto -c -k "target/release/sapu" "$RUNNER_TEMP/sapu-cli-notarize.zip"
           xcrun notarytool submit "$RUNNER_TEMP/sapu-cli-notarize.zip" \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
@@ -88,6 +96,7 @@ jobs:
         run: |
           cd dist
           ditto -c -k --keepParent Sapu.app "Sapu-${GITHUB_REF_NAME}-macos-universal.zip"
+          ditto -c -k --keepParent SapuShell.app "SapuShell-${GITHUB_REF_NAME}-macos-universal.zip"
           tar czf "sapu-cli-${GITHUB_REF_NAME}-macos-universal.tar.gz" -C ../target/release sapu
 
       - uses: softprops/action-gh-release@v2

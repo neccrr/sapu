@@ -4074,8 +4074,11 @@ dependencies = [
 name = "sapu-ffi"
 version = "0.10.0"
 dependencies = [
+ "dirs",
  "sapu-core",
  "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
  "uniffi",
 ]
 
