@@ -10,8 +10,9 @@
 //! 4. Also runs 5-fold cross-validation over the seed, grouped by app, so the
 //!    same app never sits on both sides of a split.
 
+use sapu_core::ml::apps::Apps;
 use sapu_core::ml::features::{self, Ctx};
-use sapu_core::ml::model::{self, argmax, class_index, Example, Model, CLASSES};
+use sapu_core::ml::model::{self, argmax, class_index, Model};
 use sapu_core::ml::{self, dataset};
 use sapu_core::{Judge, Kind, Node, ScanStats, Tree, Verdict};
 use std::path::{Path, PathBuf};
@@ -88,7 +89,7 @@ fn total(n: &mut Node) {
     n.logical = size;
     n.files = files;
     n.modified = modified;
-    n.children.sort_by(|a, b| b.size.cmp(&a.size));
+    n.children.sort_by_key(|c| std::cmp::Reverse(c.size));
 }
 
 /// Apps installed on the simulated Mac.
@@ -182,7 +183,8 @@ fn simulated_home() -> Tree {
         );
     }
     for app in ["Slack", "discord", "Code", "Spotify", "Notion", "Figma", "Postman", "Cursor", "Signal"] {
-        for (sub, mb) in [("Cache", 200), ("Code Cache", 80), ("GPUCache", 10), ("Local Storage", 5), ("IndexedDB", 40)] {
+        for (sub, mb) in [("Cache", 200), ("Code Cache", 80), ("GPUCache", 10), ("Local Storage", 5), ("IndexedDB", 40)]
+        {
             add(format!("Library/Application Support/{app}/{sub}"), Kind::Dir, mb, rng.below(5), 300);
         }
     }
@@ -216,7 +218,8 @@ fn simulated_home() -> Tree {
     }
     let dl = ["dmg", "pkg", "zip", "tar.gz", "pdf", "png", "mp4", "csv", "iso", "log"];
     for i in 0..60 {
-        let name = format!("{}-{i}.{}", rng.pick(&["setup", "invoice", "photos", "data", "app", "file"]), rng.pick(&dl));
+        let name =
+            format!("{}-{i}.{}", rng.pick(&["setup", "invoice", "photos", "data", "app", "file"]), rng.pick(&dl));
         add(format!("Downloads/{name}"), Kind::File, 1 + rng.below(900), rng.below(500), 1);
     }
     for r in [".npm/_cacache/content-v2", ".cargo/registry/cache/index", ".gradle/caches/modules-2", ".Trash/old"] {
@@ -272,25 +275,29 @@ fn group(path: &Path) -> String {
 }
 
 // ── the version under test ─────────────────────────────────────────────
-fn ctx(home: &Path) -> Ctx<'_> {
-    Ctx { home, now: NOW }
+/// Seed rows from before 0.11. Cross-validation tests on these only, so
+/// old and new models are scored on the same items.
+fn original_seed() -> &'static str {
+    SEED.split("# ── added in 0.11").next().unwrap()
 }
 
-fn to_example(r: &Row, c: &Ctx) -> Example {
-    Example { features: features::extract(&r.path, &r.node, c), label: class_index(r.verdict), weight: 2.0 }
-}
-
-fn train(seed: &[Row], tree: &Tree, judge: &Judge) -> Model {
+fn train(seed: &str, tree: &Tree, judge: &Judge) -> Model {
     let h = home();
-    let c = ctx(&h);
-    let mut all: Vec<Example> = seed.iter().map(|r| to_example(r, &c)).collect();
-    all.extend(dataset::distill(tree, judge, &c));
-    Model::train(&all, &model::TrainConfig::default())
+    let installed = Apps::from_names(INSTALLED);
+    let all = Apps::all_installed();
+    let mut examples = dataset::parse_tsv(seed, &h, &Ctx { home: &h, now: NOW, apps: &all }, 2.0);
+    examples.extend(dataset::distill(tree, judge, &Ctx { home: &h, now: NOW, apps: &installed }));
+    let mut m = Model::train(&examples, &model::TrainConfig::default());
+    m.apps = installed;
+    if let Ok(t) = std::env::var("EVAL_T") {
+        m.metrics.temperature = t.parse().unwrap();
+    }
+    m
 }
 
 fn probs(m: &Model, r: &Row) -> [f32; 4] {
     let h = home();
-    m.predict(&features::extract(&r.path, &r.node, &ctx(&h)))
+    m.predict(&features::extract(&r.path, &r.node, &Ctx { home: &h, now: NOW, apps: &m.apps }))
 }
 
 // ── scoring ────────────────────────────────────────────────────────────
@@ -326,7 +333,12 @@ impl Score {
         } else {
             self.removable += 1;
         }
-        if let Some(j) = ml::predict(m, judge, &r.path, &r.node) {
+        let shown = ml::predict(m, judge, &r.path, &r.node);
+        if std::env::var("EVAL_V").is_ok() {
+            let v = shown.as_ref().map(|j| format!("{:?}", j.verdict)).unwrap_or("-".into());
+            eprintln!("{:?}\t{v}\t{:.2}\t{}", r.verdict, p[k], r.path.display());
+        }
+        if let Some(j) = shown {
             self.suggested += 1;
             if j.verdict == r.verdict {
                 self.suggested_right += 1;
@@ -364,7 +376,8 @@ impl Score {
 fn main() {
     let judge = Judge::with(home(), NOW);
     let tree = simulated_home();
-    let seed = rows(SEED);
+    let seed = rows(original_seed());
+    let seed_lines: Vec<&str> = SEED.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')).collect();
     let eval: Vec<Row> = rows(EVAL)
         .into_iter()
         .filter(|r| {
@@ -376,10 +389,16 @@ fn main() {
         })
         .collect();
 
-    let model = train(&seed, &tree, &judge);
-    println!("Training: {} examples, built-in holdout accuracy {:.1}%", model.metrics.examples, {
-        100.0 * model.metrics.holdout_accuracy
-    });
+    let model = train(SEED, &tree, &judge);
+    let m = &model.metrics;
+    println!(
+        "Training: {} examples, built-in holdout accuracy {:.1}% (hand-labelled only: {:.1}% of {}), temperature {:.1}",
+        m.examples,
+        100.0 * m.holdout_accuracy,
+        100.0 * m.hand_accuracy,
+        m.hand_holdout,
+        m.temperature
+    );
     println!();
     let mut s = Score::default();
     for r in &eval {
@@ -395,10 +414,11 @@ fn main() {
     for fold in 0..5 {
         let in_fold = |r: &Row| {
             let g = group(&r.path);
-            groups.iter().position(|x| *x == g).unwrap() % 5 == fold
+            groups.iter().position(|x| *x == g).is_some_and(|p| p % 5 == fold)
         };
-        let train_rows: Vec<Row> = seed.iter().filter(|r| !in_fold(r)).cloned().collect();
-        let m = train(&train_rows, &tree, &judge);
+        let train_text: Vec<&str> =
+            seed_lines.iter().filter(|l| rows(l).first().is_none_or(|r| !in_fold(r))).copied().collect();
+        let m = train(&train_text.join("\n"), &tree, &judge);
         for r in seed.iter().filter(|r| in_fold(r)) {
             if judge.judge(&r.path, &r.node).is_none() {
                 cv.add(&m, &judge, r);
@@ -407,5 +427,4 @@ fn main() {
     }
     println!();
     cv.print("Seed, 5-fold cross-validation grouped by app");
-    let _ = CLASSES;
 }

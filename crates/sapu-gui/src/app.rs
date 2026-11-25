@@ -850,7 +850,7 @@ impl SapuApp {
         for (r, _) in &items {
             if r.judgement.is_ai() {
                 if let Some(node) = b.tree.root.get(&r.idx_path) {
-                    let _ = ml::record_feedback(&r.path, node, r.judgement.verdict, &b.judge);
+                    let _ = ml::record_accepted_guess(&r.path, node, r.judgement.verdict, &b.judge);
                 }
             }
         }
