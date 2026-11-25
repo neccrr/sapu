@@ -537,10 +537,19 @@ fn model_report(args: &ScanArgs) -> Result<()> {
     );
     println!("  {:<22} {} ms", style("Training time").dim(), m.train_ms);
     println!(
-        "  {:<22} {}",
+        "  {:<22} {} (whole folders held out)",
         style("Held-out accuracy").dim(),
         style(format!("{:.1}%", m.holdout_accuracy * 100.0)).green().bold()
     );
+    if m.hand_holdout > 0 {
+        println!(
+            "  {:<22} {} on {} hand-labelled items the rules don't cover",
+            style("Where rules are silent").dim(),
+            style(format!("{:.1}%", m.hand_accuracy * 100.0)).bold(),
+            m.hand_holdout
+        );
+    }
+    println!("  {:<22} {:.1} (calibrates how sure it says it is)", style("Temperature").dim(), m.temperature);
     println!("  {:<22} {}", style("Saved to").dim(), format::tilde(&ml::model_path()));
 
     println!();

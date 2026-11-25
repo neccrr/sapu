@@ -1,6 +1,19 @@
 # Changelog
 
 ## Unreleased
+- **Sapu AI, better and more honest.** On a held-out test set of items the rules don't cover
+  it is right 89.5% of the time (was 80.0%) and finds 57% of what can go (was 43%), with the
+  same 1 wrong "Keep" item flagged. Run `cargo run --release -p sapu-core --example ml_eval`
+  to reproduce.
+  - Spots data left behind by apps you removed (`~/Library/Application Support/Evernote`
+    with no Evernote installed). Always shown as Review, never ticked for you.
+  - "85% sure" now means it: confidence is calibrated on held-out data.
+  - The training report's accuracy holds out whole folders, and also shows accuracy on
+    hand-labelled items only, the part that matters.
+  - Learns more app data that must stay (databases, cookies, profiles, IndexedDB).
+  - Only your latest choice per item counts, and accepting an AI guess counts less than a
+    choice you made yourself. `feedback.tsv` is tidied once it's mostly repeats.
+  - New signals: the folder an item sits in, and how many files a folder holds.
 - A macOS guide, [`macos/README.md`](macos/README.md): install and first launch, Full Disk
   Access, data locations, iCloud, building Sapu.app (including universal builds), test
   options and how releases are made.

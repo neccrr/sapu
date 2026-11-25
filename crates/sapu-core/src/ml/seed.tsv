@@ -152,3 +152,41 @@ Keep	file	Documents/code/web/package.json	1	5
 Keep	file	.zshrc	1	30
 Keep	file	Library/Application Support/Code/User/settings.json	1	3
 Keep	file	Movies/family-video.mp4	2000	300
+# ── added in 0.11: app data that looks like a cache but isn't (keep) ──
+Keep	file	Library/Application Support/Google/Chrome/Default/Cookies	5	1
+Keep	file	Library/Application Support/Google/Chrome/Default/Login Data	1	1
+Keep	file	Library/Application Support/BraveSoftware/Brave-Browser/Default/History	20	1
+Keep	dir	Library/Application Support/Google/Chrome/Default/Sessions	10	1
+Keep	dir	Library/Application Support/Slack/IndexedDB	100	1
+Keep	dir	Library/Application Support/Slack/storage	20	1
+Keep	dir	Library/Application Support/discord/Local Storage	5	1
+Keep	dir	Library/Application Support/Figma/DesktopProfile/IndexedDB	50	1
+Keep	dir	Library/Application Support/Notion/Partitions	300	1
+Keep	file	Library/Application Support/Code/User/globalStorage/state.vscdb	40	1
+Keep	file	Library/Messages/chat.db	500	1
+Keep	file	Library/Application Support/Firefox/Profiles/abc.default-release/cookies.sqlite	5	1
+Keep	file	Library/Application Support/Firefox/Profiles/abc.default-release/key4.db	1	1
+Keep	dir	Library/Application Support/Firefox/Profiles/abc.default-release/storage	200	1
+Keep	dir	Library/Containers/com.microsoft.Excel/Data/Documents	100	10
+Keep	dir	Library/Containers/com.apple.Preview/Data/Documents	10	30
+Keep	dir	Library/Application Support/Zed/db	20	1
+Keep	file	Library/Application Support/Arc/StorableSidebar.json	1	1
+Keep	dir	Library/Application Support/Steam/config	5	1
+Keep	dir	Documents/code/api/src	20	2
+Keep	dir	Documents/code/game/Assets	800	5
+Keep	dir	.config/gh	1	10
+Keep	dir	.docker	1	5
+# ── added in 0.11: whole app folders (keep while the app is installed) ──
+Keep	dir	Library/Application Support/Slack	900	1	installed
+Keep	dir	Library/Application Support/discord	700	1	installed
+Keep	dir	Library/Application Support/Steam	2000	200	installed
+Keep	dir	Library/Containers/com.spotify.client	300	90	installed
+# ── added in 0.11: left behind by apps that are no longer installed ──
+Review	dir	Library/Application Support/Spark	900	500	gone
+Review	dir	Library/Containers/com.readdle.smartemail-Mac	600	400	gone
+Review	dir	Library/Application Support/Kite	1500	600	gone
+Review	dir	Library/Application Support/Mailspring	300	400	gone
+Review	dir	Library/Application Support/Franz	400	700	gone
+Review	dir	Library/Containers/com.microsoft.onenote.mac	700	500	gone
+Review	dir	Library/Application Support/BlueStacks	3000	600	gone
+Review	dir	Library/Group Containers/group.com.getdropbox.dropbox	200	400	gone

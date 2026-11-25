@@ -5,6 +5,7 @@
 //! vocabulary never has to be stored and unseen words still get a slot.
 //! The strings are kept alongside so the model can explain itself.
 
+use super::apps::{AppStatus, Apps};
 use crate::tree::Node;
 use std::collections::HashSet;
 use std::path::Path;
@@ -22,7 +23,12 @@ pub struct Feature {
 pub struct Ctx<'a> {
     pub home: &'a Path,
     pub now: u64,
+    /// Installed apps, to spot data left behind by removed ones.
+    pub apps: &'a Apps,
 }
+
+/// App data untouched this long, with no matching app installed, counts as a leftover.
+pub const LEFTOVER_DAYS: u64 = 60;
 
 fn fnv1a(s: &str) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
@@ -33,14 +39,14 @@ fn fnv1a(s: &str) -> u64 {
     h
 }
 
-/// Split a file name into lowercase word tokens.
-/// "GPUCache" → gpu, cache · "com.spotify.client" → com, spotify, client
-/// · "node_modules" → node, modules.
 /// Hash slot for a feature name.
 pub fn slot(name: &str) -> u32 {
     (fnv1a(name) % DIM as u64) as u32
 }
 
+/// Split a file name into lowercase word tokens.
+/// "GPUCache" → gpu, cache · "com.spotify.client" → com, spotify, client
+/// · "node_modules" → node, modules.
 pub fn tokens(s: &str) -> Vec<String> {
     let chars: Vec<char> = s.chars().collect();
     let mut out: Vec<String> = Vec::new();
@@ -81,6 +87,20 @@ pub fn age_bucket(days: u64) -> &'static str {
         365..=729 => "<2y",
         _ => "2y+",
     }
+}
+
+pub fn files_bucket(files: u64) -> &'static str {
+    match files {
+        0..=9 => "1-9",
+        10..=99 => "10-99",
+        100..=999 => "100-999",
+        1_000..=9_999 => "1k-10k",
+        _ => "10k+",
+    }
+}
+
+pub fn feature(name: &str, val: f32) -> Feature {
+    Feature { name: name.to_string(), idx: slot(name), val }
 }
 
 pub fn size_bucket(bytes: u64) -> &'static str {
@@ -141,6 +161,9 @@ pub fn extract(path: &Path, node: &Node, ctx: &Ctx) -> Vec<Feature> {
                     add(format!("in:{t}"), 1.0);
                 }
             }
+            if let Some(parent) = comps.last() {
+                add(format!("parent:{parent}"), 1.0);
+            }
             add("depth".into(), (comps.len() as f32 / 10.0).min(1.0));
         }
         Err(_) => {
@@ -153,11 +176,32 @@ pub fn extract(path: &Path, node: &Node, ctx: &Ctx) -> Vec<Feature> {
 
     // How big, how old, how many files
     add(format!("size:{}", size_bucket(node.size)), 1.0);
-    if node.modified > 0 {
-        let days = ctx.now.saturating_sub(node.modified) / 86_400;
+    // Unknown (0) for hand-labelled examples, so it's left out rather than guessed.
+    if is_dir && node.files > 0 {
+        add(format!("files:{}", files_bucket(node.files)), 1.0);
+    }
+    let days = (node.modified > 0).then(|| ctx.now.saturating_sub(node.modified) / 86_400);
+    if let Some(days) = days {
         add(format!("age:{}", age_bucket(days)), 1.0);
     }
+
+    // Does the app that made it still exist?
+    match ctx.apps.status(path, ctx.home) {
+        Some(AppStatus::Installed) => add("app:installed".into(), 1.0),
+        Some(AppStatus::Gone) if days.is_some_and(|d| d >= LEFTOVER_DAYS) => add("app:gone".into(), 1.0),
+        _ => {}
+    }
     f
+}
+
+/// Replace any app-status feature (for labelled rows that say so explicitly).
+pub fn set_app_status(f: &mut Vec<Feature>, status: Option<AppStatus>) {
+    f.retain(|ft| !ft.name.starts_with("app:"));
+    match status {
+        Some(AppStatus::Installed) => f.push(feature("app:installed", 1.0)),
+        Some(AppStatus::Gone) => f.push(feature("app:gone", 1.0)),
+        None => {}
+    }
 }
 
 /// Human wording for a feature name, used in explanations.
@@ -183,6 +227,9 @@ pub fn describe(name: &str) -> Option<String> {
         },
         "size" => format!("size {v}"),
         "files" => format!("{v} files inside"),
+        "parent" => format!("directly inside “{v}”"),
+        "app" if v == "gone" => "its app is no longer installed".into(),
+        "app" => "its app is installed".into(),
         "outside-home" => "outside your home folder".into(),
         _ => return None,
     })

@@ -25,6 +25,22 @@ pub struct Example {
     pub label: usize,
     /// Importance (user feedback counts more than rule-derived labels).
     pub weight: f32,
+    /// Examples sharing a group (same folder) always land on the same side of
+    /// the held-out split, so the score isn't inflated by near-duplicates.
+    pub group: u64,
+    /// Labelled by a person (seed or your feedback) rather than by the rules.
+    pub hand: bool,
+}
+
+impl Example {
+    pub fn new(features: Vec<Feature>, label: usize, weight: f32) -> Self {
+        Self { features, label, weight, group: 0, hand: false }
+    }
+}
+
+/// Group id for an example: its parent folder.
+pub fn group_of(path: &std::path::Path) -> u64 {
+    super::features::slot(&path.parent().unwrap_or(path).to_string_lossy()) as u64 + 1
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -35,7 +51,18 @@ pub struct Metrics {
     pub from_feedback: usize,
     pub per_class: [usize; K],
     /// Accuracy on a 10% held-out split the model never trained on.
+    /// Split by folder, so siblings of a test item are never trained on.
     pub holdout_accuracy: f32,
+    /// The same, counting only hand-labelled items (seed and your feedback):
+    /// the closest thing to "how good is it where the rules are silent".
+    #[serde(default)]
+    pub hand_accuracy: f32,
+    #[serde(default)]
+    pub hand_holdout: usize,
+    /// Softmax temperature fitted on the held-out split, so "85% sure" is
+    /// right about 85% of the time. 0 in older model files means 1.
+    #[serde(default)]
+    pub temperature: f32,
     /// confusion[actual][predicted] on the held-out split.
     pub confusion: [[usize; K]; K],
     pub trained_at: u64,
@@ -49,6 +76,8 @@ pub struct Model {
     pub metrics: Metrics,
     /// Feature names seen in training (for reports; not saved to disk).
     pub vocab: Vec<String>,
+    /// Installed apps on this Mac (not saved; looked up on train and load).
+    pub apps: super::apps::Apps,
 }
 
 impl std::fmt::Debug for Model {
@@ -97,7 +126,7 @@ fn softmax(z: [f32; K]) -> [f32; K] {
 
 impl Model {
     fn zeros() -> Self {
-        Self { w: vec![0.0; DIM * K], metrics: Metrics::default(), vocab: Vec::new() }
+        Self { w: vec![0.0; DIM * K], metrics: Metrics::default(), vocab: Vec::new(), apps: Default::default() }
     }
 
     fn logits(&self, f: &[Feature]) -> [f32; K] {
@@ -111,9 +140,19 @@ impl Model {
         z
     }
 
-    /// Probability per class (Safe, Likely, Review, Keep).
+    /// Probability per class (Safe, Likely, Review, Keep), calibrated.
     pub fn predict(&self, f: &[Feature]) -> [f32; K] {
-        softmax(self.logits(f))
+        let t = if self.metrics.temperature > 0.0 { self.metrics.temperature } else { 1.0 };
+        softmax(self.logits(f).map(|z| z / t))
+    }
+
+    /// The temperature that best fits held-out examples (lowest log loss).
+    fn fit_temperature(&self, examples: &[Example], idx: &[usize]) -> f32 {
+        let logits: Vec<([f32; K], usize, f32)> =
+            idx.iter().map(|&i| (self.logits(&examples[i].features), examples[i].label, examples[i].weight)).collect();
+        let loss =
+            |t: f32| -> f32 { logits.iter().map(|(z, y, w)| -w * softmax(z.map(|v| v / t))[*y].max(1e-7).ln()).sum() };
+        (5..=60).map(|i| i as f32 / 10.0).min_by(|a, b| loss(*a).total_cmp(&loss(*b))).unwrap_or(1.0)
     }
 
     /// Features that pushed hardest towards `class`, strongest first.
@@ -190,18 +229,37 @@ impl Model {
         let mut all: Vec<usize> = (0..examples.len()).collect();
         rng.shuffle(&mut all);
 
-        let n_hold = ((examples.len() as f32 * cfg.holdout) as usize).min(examples.len().saturating_sub(1));
-        let (hold, train) = all.split_at(n_hold);
+        // Hold out whole folders: ~`holdout` of the groups. Ungrouped examples
+        // (group 0) are split one by one.
+        let salt = cfg.seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let held = |i: usize| {
+            let g = examples[i].group;
+            let key = if g == 0 { i as u64 ^ 0xA5A5 } else { g };
+            let h = (key ^ salt).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            ((h >> 33) % 1000) < (cfg.holdout * 1000.0) as u64
+        };
+        let (mut hold, mut train): (Vec<usize>, Vec<usize>) = all.iter().partition(|&&i| held(i));
+        if train.is_empty() {
+            std::mem::swap(&mut hold, &mut train);
+        }
 
         let mut confusion = [[0usize; K]; K];
-        let mut correct = 0usize;
+        let (mut correct, mut hand_n, mut hand_correct) = (0usize, 0usize, 0usize);
+        let mut temperature = 1.0;
         if !hold.is_empty() {
-            let m = Self::fit(examples, train, cfg, &mut rng);
-            for &i in hold {
+            let mut m = Self::fit(examples, &train, cfg, &mut rng);
+            temperature = m.fit_temperature(examples, &hold);
+            m.metrics.temperature = temperature;
+            for &i in &hold {
                 let p = m.predict(&examples[i].features);
                 let pred = argmax(&p);
+                let ok = pred == examples[i].label;
                 confusion[examples[i].label][pred] += 1;
-                correct += (pred == examples[i].label) as usize;
+                correct += ok as usize;
+                if examples[i].hand {
+                    hand_n += 1;
+                    hand_correct += ok as usize;
+                }
             }
         }
 
@@ -218,6 +276,9 @@ impl Model {
             examples: examples.len(),
             per_class,
             holdout_accuracy: if hold.is_empty() { 0.0 } else { correct as f32 / hold.len() as f32 },
+            hand_accuracy: if hand_n == 0 { 0.0 } else { hand_correct as f32 / hand_n as f32 },
+            hand_holdout: hand_n,
+            temperature,
             confusion,
             trained_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -267,7 +328,7 @@ impl Model {
         let mut raw = vec![0u8; DIM * K * 4];
         f.read_exact(&mut raw)?;
         let w = raw.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect();
-        Ok(Self { w, metrics, vocab: Vec::new() })
+        Ok(Self { w, metrics, vocab: Vec::new(), apps: Default::default() })
     }
 }
 

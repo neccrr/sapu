@@ -616,7 +616,7 @@ impl ScanResult {
         for r in &picked {
             if r.judgement.is_ai() {
                 if let Some(node) = self.tree.root.get(&r.idx_path) {
-                    let _ = ml::record_feedback(&r.path, node, r.judgement.verdict, &self.judge);
+                    let _ = ml::record_accepted_guess(&r.path, node, r.judgement.verdict, &self.judge);
                 }
             }
         }

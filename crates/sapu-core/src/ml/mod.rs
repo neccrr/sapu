@@ -6,11 +6,12 @@
 //! regression) → [`dataset`] (where labels come from). [`predict`] turns a
 //! prediction into a [`Judgement`] for items the rules don't recognise.
 
+pub mod apps;
 pub mod dataset;
 pub mod features;
 pub mod model;
 
-pub use dataset::{feedback_path, model_path, record_feedback};
+pub use dataset::{feedback_path, model_path, record_accepted_guess, record_feedback};
 pub use model::{Metrics, Model};
 
 use crate::judge::{Action, Category, Judge, Judgement, Source, Verdict};
@@ -25,7 +26,15 @@ pub const MIN_CONFIDENCE: f32 = 0.85;
 
 /// Train on seed + your scan (via the rules) + your feedback, then save.
 pub fn train(tree: &Tree, judge: &Judge) -> Model {
-    let ctx = Ctx { home: judge.home(), now: judge.now() };
+    train_with(tree, judge, apps::Apps::scan(judge.home()))
+}
+
+/// [`train`] with a given set of installed apps (tests, evaluation).
+pub fn train_with(tree: &Tree, judge: &Judge, apps: apps::Apps) -> Model {
+    if let Err(e) = dataset::compact_feedback() {
+        tracing::warn!(error = %e, "could not tidy feedback file");
+    }
+    let ctx = Ctx { home: judge.home(), now: judge.now(), apps: &apps };
     let seed = dataset::seed_examples(&ctx);
     let rules = dataset::distill(tree, judge, &ctx);
     let feedback = dataset::feedback_examples(&ctx);
@@ -39,12 +48,15 @@ pub fn train(tree: &Tree, judge: &Judge) -> Model {
     model.metrics.from_seed = n_seed;
     model.metrics.from_rules = n_rules;
     model.metrics.from_feedback = n_feedback;
+    model.apps = apps;
     info!(
         examples = model.metrics.examples,
         seed = n_seed,
         rules = n_rules,
         feedback = n_feedback,
         holdout_accuracy = model.metrics.holdout_accuracy,
+        hand_accuracy = model.metrics.hand_accuracy,
+        temperature = model.metrics.temperature,
         ms = model.metrics.train_ms,
         "model trained"
     );
@@ -55,7 +67,11 @@ pub fn train(tree: &Tree, judge: &Judge) -> Model {
 }
 
 pub fn load() -> Option<Model> {
-    Model::load(&model_path()).ok()
+    let mut m = Model::load(&model_path()).ok()?;
+    if let Some(home) = dirs::home_dir() {
+        m.apps = apps::Apps::scan(&home);
+    }
+    Some(m)
 }
 
 /// Folders that hold an app's whole data (`~/Library/Application Support/Slack`).
@@ -74,26 +90,34 @@ fn is_app_data_root(path: &Path, home: &Path) -> bool {
 /// Never returns Keep (that's the rules' job) and never acts on its own.
 ///
 /// Guards against confident-but-wrong calls:
-/// - app data folders themselves are off-limits (look inside them instead);
+/// - app data folders themselves are off-limits (look inside them instead),
+///   unless their app is gone, and then only ever as Review;
 /// - the evidence must include something about the item itself (its name or
 ///   file type), not just where it lives, so "it's in Application Support"
 ///   alone can never justify deleting something.
 pub fn predict(model: &Model, judge: &Judge, path: &Path, node: &Node) -> Option<Judgement> {
-    if is_app_data_root(path, judge.home()) {
+    let ctx = Ctx { home: judge.home(), now: judge.now(), apps: &model.apps };
+    let f = features::extract(path, node, &ctx);
+    let leftover = f.iter().any(|ft| ft.name == "app:gone");
+    let app_root = is_app_data_root(path, judge.home());
+    if app_root && !leftover {
         return None;
     }
-    let ctx = Ctx { home: judge.home(), now: judge.now() };
-    let f = features::extract(path, node, &ctx);
     let p = model.predict(&f);
     let k = argmax(&p);
-    let verdict = CLASSES[k];
+    let mut verdict = CLASSES[k];
     if verdict == Verdict::Keep || p[k] < MIN_CONFIDENCE {
         return None;
     }
     let evidence = model.explain(&f, k);
-    let about_itself = evidence.iter().take(4).any(|(n, _)| n.starts_with("name:") || n.starts_with("ext:"));
+    let about_itself =
+        evidence.iter().take(4).any(|(n, _)| n.starts_with("name:") || n.starts_with("ext:") || *n == "app:gone");
     if !about_itself {
         return None;
+    }
+    // A whole app's data is a personal call, even when the app is gone.
+    if app_root {
+        verdict = Verdict::Review;
     }
     let reasons: Vec<String> = evidence.into_iter().filter_map(|(name, _)| features::describe(name)).take(3).collect();
     let because = if reasons.is_empty() { String::new() } else { format!(": {}", reasons.join(", ")) };
@@ -135,7 +159,8 @@ mod tests {
         let now = 2_000_000_000;
         let home = std::path::PathBuf::from("/Users/test");
         let judge = Judge::with(home.clone(), now);
-        let ctx = Ctx { home: &home, now };
+        let apps = apps::Apps::unknown();
+        let ctx = Ctx { home: &home, now, apps: &apps };
         let model = Model::train(&dataset::seed_examples(&ctx), &model::TrainConfig::default());
 
         // An app the seed never mentions, hiding a cache the same way.
