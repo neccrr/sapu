@@ -1,0 +1,106 @@
+# Held-out test set for Sapu AI. Never used for training.
+# Hand-labelled items the rules don't cover, from apps and folders that are
+# NOT in seed.tsv, so it measures how the model generalises.
+# The simulated Mac has the apps listed in ml_eval.rs installed; "orphan"
+# rows belong to apps that are not installed any more.
+# verdict	kind	path (relative to home)	size_mb	age_days
+# ── Safe: caches hidden in app data ──
+Safe	dir	Library/Application Support/Microsoft Edge/Default/Cache	600	1
+Safe	dir	Library/Application Support/Microsoft Edge/Default/Code Cache	150	1
+Safe	dir	Library/Application Support/Microsoft Edge/Default/GPUCache	20	1
+Safe	dir	Library/Application Support/Postman/Cache	200	3
+Safe	dir	Library/Application Support/Postman/GPUCache	15	3
+Safe	dir	Library/Application Support/Cursor/Cache	300	1
+Safe	dir	Library/Application Support/Cursor/CachedData	500	1
+Safe	dir	Library/Application Support/Cursor/logs	60	1
+Safe	dir	Library/Application Support/Signal/Cache	150	2
+Safe	dir	Library/Application Support/Signal/Code Cache	60	2
+Safe	dir	Library/Application Support/Claude/Cache	200	1
+Safe	dir	Library/Application Support/Claude/Code Cache	80	1
+Safe	dir	Library/Application Support/Obsidian/Cache	80	2
+Safe	dir	Library/Containers/com.microsoft.Word/Data/Library/Caches	300	5
+Safe	dir	Library/Containers/com.apple.mail/Data/Library/Caches	200	3
+Safe	dir	Library/Containers/com.apple.Music/Data/Library/Caches	150	3
+Safe	dir	.cache/uv	2000	30
+Safe	dir	.cache/pre-commit	300	60
+Safe	dir	.npm/_npx	500	30
+Safe	dir	Documents/code/shop/.next	400	5
+Safe	dir	Documents/code/shop/.turbo	100	5
+Safe	dir	Documents/code/blog/.parcel-cache	120	40
+Safe	dir	Documents/code/rs/target	3000	2
+Safe	dir	Documents/code/app/ios/Pods	500	20
+Safe	dir	Documents/code/android/build	800	10
+# ── Likely: probably not needed ──
+Likely	dir	go/pkg/mod	2000	30
+Likely	dir	Library/Developer/Xcode/iOS DeviceSupport/17.2 (21C62)	4000	300
+Likely	dir	Library/Developer/Xcode/watchOS DeviceSupport/Watch6,1 10.1 (21S71)	2000	300
+Likely	dir	.android/avd/Pixel_7_API_34.avd	10000	300
+Likely	dir	Documents/code/old2/venv	500	500
+Likely	dir	Documents/code/py/.venv	600	200
+Likely	file	Desktop/Screen Recording 2024-02-11 at 14.02.33.mov	300	400
+Likely	file	Desktop/Screenshot 2024-03-02 at 11.22.01.png	2	500
+Likely	file	Documents/old-backup.bak	200	400
+Likely	file	Documents/presentation-copy.old	100	300
+Likely	file	Downloads/archive (3).zip	300	20
+Likely	file	tmp/render.tmp	300	90
+Likely	file	Documents/code/c/core.4242	600	60
+# ── Review: personal judgement needed ──
+Review	dir	Parallels/Ubuntu 22.04.pvm	30000	200
+Review	dir	VirtualBox VMs/Kali	25000	100
+Review	dir	.ollama/models/blobs	6000	30
+Review	dir	.cache/lm-studio/models	8000	30
+Review	dir	Library/Application Support/Steam/steamapps/common/Hades	15000	200
+Review	dir	Library/Application Support/Epic/UnrealEngine/5.3	40000	100
+Review	dir	Movies/Final Cut Projects/Trip.fcpbundle	15000	300
+Review	dir	Music/Logic/Old Song.logicx	900	400
+Review	dir	Library/Group Containers/group.net.whatsapp.WhatsApp.shared/Message/Media	6000	5
+Review	dir	.pyenv/versions/3.9.18	300	600
+Review	dir	.nvm/versions/node/v16.20.2	200	600
+Review	dir	miniforge3/pkgs	3000	200
+Review	dir	Documents/Zoom/2024-01-10 Standup	700	300
+Review	file	Movies/old-lecture.mp4	400	400
+Review	file	Documents/dataset-2022.parquet	900	120
+# ── Review: leftovers from apps that are no longer installed ──
+Review	dir	Library/Application Support/Evernote	2000	600
+Review	dir	Library/Application Support/Skype	800	500
+Review	dir	Library/Containers/com.skype.skype	500	500
+Review	dir	Library/Application Support/Sketch	300	400
+Review	dir	Library/Containers/com.evernote.Evernote	1500	600
+Review	dir	Library/Application Support/Atom	400	700
+Review	dir	Library/Application Support/OneDrive	300	400
+Review	dir	Library/Application Support/Hopper Disassembler v4	200	400
+# ── Keep: app data, settings, personal files ──
+Keep	dir	Library/Application Support/Microsoft Edge	1500	1
+Keep	file	Library/Application Support/Microsoft Edge/Default/History	30	1
+Keep	file	Library/Application Support/Microsoft Edge/Default/Login Data	1	1
+Keep	dir	Library/Application Support/Microsoft Edge/Default/Extensions	100	20
+Keep	dir	Library/Application Support/Microsoft Edge/Default/Sessions	10	1
+Keep	dir	Library/Application Support/Cursor/User	60	1
+Keep	file	Library/Application Support/Cursor/User/globalStorage/state.vscdb	30	1
+Keep	file	Library/Application Support/Signal/sql/db.sqlite	800	1
+Keep	dir	Library/Application Support/Signal/attachments.noindex	2000	1
+Keep	dir	Library/Application Support/Postman/Partitions	200	2
+Keep	dir	Library/Application Support/Claude/IndexedDB	50	1
+Keep	dir	Library/Application Support/Claude/Local Storage	10	1
+Keep	dir	Library/Containers/com.microsoft.Word/Data/Documents	200	10
+Keep	file	Library/Application Support/Anki2/User 1/collection.anki2	200	1
+Keep	file	Library/Application Support/Firefox/Profiles/xyz.default-release/places.sqlite	50	1
+Keep	file	Library/Application Support/Arc/User Data/Default/Bookmarks	1	1
+Keep	dir	Library/Application Support/Spotify/Users	10	5
+Keep	dir	Library/Application Support/Steam/userdata	200	10
+Keep	dir	Library/Application Support/minecraft/saves/World 2	400	20
+Keep	file	Library/Group Containers/group.com.apple.notes/NoteStore.sqlite	300	1
+Keep	file	Library/Application Support/Telegram Desktop/tdata/key_datas	1	1
+Keep	dir	Library/Application Support/Code/User/snippets	1	10
+Keep	dir	Documents/Research	2000	10
+Keep	dir	Documents/code/shop/src	30	1
+Keep	file	Documents/Tax 2024.pdf	2	100
+Keep	file	Documents/Essay final.docx	1	30
+Keep	file	Desktop/poster.ai	300	20
+Keep	dir	Pictures/Lightroom Catalog	4000	5
+Keep	file	Pictures/IMG_2024.HEIC	4	200
+Keep	file	Movies/wedding.mov	3000	100
+Keep	dir	Music/Audio Music Apps	2000	30
+Keep	dir	.config/nvim	1	10
+Keep	dir	.aws	1	30
+Keep	dir	.kube	1	30
