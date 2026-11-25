@@ -190,9 +190,34 @@ To remove Sapu completely, delete Sapu.app and those three `sapu` folders.
 | `SAPU_LOG=debug` | More detail in the log file |
 
 
+## Why Rust
+
+A disk cleaner has two jobs that pull in different directions: it has to be quick enough to
+walk your whole disk, and careful enough that it never removes the wrong thing. Rust is good
+at both.
+
+- **Fast without shortcuts.** The scanner spreads the walk across every core with
+  [rayon](https://github.com/rayon-rs/rayon), and the compiler checks that threads never share
+  data unsafely. That's how a full scan of 700,000 files takes seconds, not minutes.
+- **Mistakes caught before they reach your files.** The safety rules, the journal and Undo are
+  plain Rust types and functions, and errors are values the compiler makes the code deal with.
+  An unexpected path or a failed move becomes an error Sapu reports, never a crash halfway
+  through a clean. The engine, `sapu-core`, contains no `unsafe` code.
+- **One engine, every front end.** The same `sapu-core` powers the window app (egui), the
+  `sapu` command and terminal explorer (clap and ratatui), and the SwiftUI shell (through
+  UniFFI bindings). A rule or safety fix lands once and every app gets it.
+- **Small native apps.** No runtime, no Electron, no Python. Sapu.app is about 12 MB and the
+  `sapu` command about 3 MB, and both run natively on Apple Silicon and Intel.
+- **AI that stays on your Mac.** Sapu AI is a small logistic regression written in plain Rust,
+  with no ML framework and no network. It trains on your disk in milliseconds, and its model
+  stays in `~/Library/Application Support/sapu`.
+
+The one place Sapu leaves Rust is the optional SwiftUI shell, which uses Apple's own UI
+toolkit on top of the same Rust engine.
+
 ## How it's built
 
-A Rust workspace with three crates:
+A Rust workspace with four crates:
 
 ```
 crates/
